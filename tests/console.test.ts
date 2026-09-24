@@ -123,6 +123,48 @@ describe("formatDiffResults", () => {
   });
 });
 
+describe("verdict column (P024)", () => {
+  const judged = [
+    result({
+      pixelDiffCount: 4820,
+      percentChanged: 1.25,
+      changed: true,
+      verdict: "Real Bug",
+      confidence: 8,
+      explanation: "x",
+    }),
+    result({
+      viewport: "mobile",
+      pixelDiffCount: 10,
+      percentChanged: 0.5,
+      changed: true,
+      verdict: "Uncertain",
+      explanation: "Could not be judged automatically: timeout",
+      judgeError: "timeout",
+    }),
+    result({ page: "about" }),
+  ];
+
+  it("shows verdicts once results are judged", () => {
+    expect(formatDiffResults(judged, { colour: false }).split("\n").slice(0, 4)).toEqual([
+      "Page   Viewport  Changed  Pixels  Status     Verdict                 Notes",
+      "home   desktop     1.25%   4,820  CHANGED    Real Bug (8/10)",
+      "home   mobile      0.50%      10  CHANGED    Uncertain (not judged)",
+      "about  desktop        0%       0  unchanged",
+    ]);
+  });
+
+  it("colours verdicts", () => {
+    const out = formatDiffResults(judged, { colour: true });
+    expect(out).toContain("\x1b[31mReal Bug (8/10)");
+    expect(out).toContain("\x1b[33mUncertain (not judged)");
+  });
+
+  it("has no verdict column before judging", () => {
+    expect(formatDiffResults([result()], { colour: false })).not.toContain("Verdict");
+  });
+});
+
 describe("printDiffResults", () => {
   it("writes the formatted report to the console", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});

@@ -63,6 +63,7 @@ screenshots/
 }
 ```
 
+- After judging (Phase 2), each changed result also gets `verdict`, `confidence`, `explanation`, `observedChanges` and `judgedBy` (the model). Unchanged screenshots aren't sent to the judge. If judging fails, the result gets `verdict: "Uncertain"` plus a `judgeError`, so it's flagged for a human rather than silently passing
 - `percentChanged` is rounded to 4 decimal places, but a real change is never reported as 0%
 - When a page's height or width changed, the smaller screenshot is padded and the extra area counts as changed (`sizeChanged: true`)
 

@@ -60,6 +60,19 @@ export function describeSizeChange(result: DiffResult): string {
   return parts.join(", ");
 }
 
+/** Verdict column text, e.g. "Real Bug (8/10)", "Uncertain (not judged)", or "". */
+export function describeVerdict(result: DiffResult): string {
+  if (!result.verdict) return "";
+  if (result.judgeError) return `${result.verdict} (not judged)`;
+  return result.confidence ? `${result.verdict} (${result.confidence}/10)` : result.verdict;
+}
+
+const VERDICT_STYLE: Record<string, Style> = {
+  "Real Bug": "red",
+  "Acceptable Change": "green",
+  Uncertain: "yellow",
+};
+
 /** Notes column: size changes and any ignored regions. */
 export function describeNotes(result: DiffResult): string {
   const notes: string[] = [];
@@ -91,12 +104,16 @@ export function formatDiffResults(
     return paint("No screenshots to compare.", "yellow", colour);
   }
 
+  // The Verdict column only appears once results have been judged (Phase 2).
+  const showVerdict = results.some((r) => r.verdict !== undefined);
+
   const header: Cell[] = [
     { text: "Page" },
     { text: "Viewport" },
     { text: "Changed", align: "right" },
     { text: "Pixels", align: "right" },
     { text: "Status" },
+    ...(showVerdict ? [{ text: "Verdict" }] : []),
     { text: "Notes" },
   ];
 
@@ -106,6 +123,9 @@ export function formatDiffResults(
     { text: formatPercent(r.percentChanged), align: "right" },
     { text: formatCount(r.pixelDiffCount), align: "right" },
     r.changed ? { text: "CHANGED", style: "red" } : { text: "unchanged", style: "green" },
+    ...(showVerdict
+      ? [{ text: describeVerdict(r), style: r.verdict ? VERDICT_STYLE[r.verdict] : undefined }]
+      : []),
     { text: describeNotes(r), style: "yellow" },
   ]);
 

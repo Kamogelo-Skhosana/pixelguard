@@ -116,6 +116,20 @@ describe("exportJson", () => {
     expect(JSON.parse(raw)).toEqual(written);
   });
 
+  it("keeps verdict fields in the JSON (P024)", async () => {
+    const path = join(dir, "judged.json");
+    const judged = result({
+      changed: true,
+      verdict: "Acceptable Change",
+      confidence: 9,
+      explanation: "Matches the new footer.",
+      observedChanges: ["Footer links reordered"],
+      judgedBy: "claude-sonnet-4-6",
+    });
+    await exportJson([judged], path);
+    expect((await readJsonReport(path)).results[0]).toEqual(judged);
+  });
+
   it("round-trips through readJsonReport", async () => {
     const path = join(dir, "roundtrip.json");
     const written = await exportJson(results, path, { currentTag: "current" });
