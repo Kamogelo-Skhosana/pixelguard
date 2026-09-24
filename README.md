@@ -85,6 +85,7 @@ pixelguard/
 │   └── generate-diff-fixtures.ts  # Regenerates tests/fixtures/diff (npm run fixtures:diff)
 ├── docs/
 │   ├── ARCHITECTURE.md        # System design, data flow, setup details
+│   ├── REPORT_TEMPLATE.md     # Design of the AI-judged Markdown report
 │   ├── ROADMAP.md             # Phase breakdown + tangible deliverables
 │   └── TICKETS.md             # All 50 tickets, grouped by phase and epic
 ├── examples/

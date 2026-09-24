@@ -165,7 +165,7 @@ How regions are applied:
 
 ## 4. Report + Dashboard (`src/report/`, `src/dashboard/`)
 
-- Console output (Phase 1) and Markdown report (Phase 2) rendering
+- Console output (Phase 1) and Markdown report (Phase 2) rendering — the report layout is designed in [REPORT_TEMPLATE.md](REPORT_TEMPLATE.md), with a rendered example in [examples/sample-report/report.md](../examples/sample-report/report.md)
 - SQLite persistence of every run's results (Phase 2+)
 - Phase 3 dashboard: run history, side-by-side diff viewer, trend chart, and "accept as new baseline" action
 

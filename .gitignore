@@ -13,6 +13,8 @@ pixelguard.db
 # Screenshots & diffs (generated per run, not committed)
 screenshots/
 diffs/
+# ...except the sample report's images, which are part of the docs
+!examples/sample-report/diffs/
 
 # Testing
 coverage/

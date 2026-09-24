@@ -1,6 +1,9 @@
 /**
  * Markdown report generation for AI-judged diff results (Phase 2).
  *
+ * Follows the design in docs/REPORT_TEMPLATE.md (P029); the expected output
+ * is shown in examples/sample-report/report.md.
+ *
  * Tickets: P029, P030, P031
  */
 
@@ -12,8 +15,7 @@ export function generateMarkdownReport(
   _summary: RunSummary,
   _results: DiffResult[]
 ): string {
-  // TODO (P029/P030): render a report section per page, showing its
-  // verdict, confidence, explanation, and a link to the diff image.
+  // TODO (P030): implement the template in docs/REPORT_TEMPLATE.md.
   throw new Error("Not implemented");
 }
 
