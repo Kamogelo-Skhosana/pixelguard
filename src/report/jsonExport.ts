@@ -6,7 +6,7 @@
 
 import type { DiffResult } from "../diff/models.js";
 
-export function exportJson(results: DiffResult[], path: string): void {
+export function exportJson(_results: DiffResult[], _path: string): void {
   // TODO (P017): serialize DiffResult[] to JSON and write to disk.
   throw new Error("Not implemented");
 }

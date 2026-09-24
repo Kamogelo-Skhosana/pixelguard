@@ -20,7 +20,7 @@ pixelguard has three logical layers, built up one per phase:
 ## 1. Capture Layer (`src/capture/`)
 
 - Uses Playwright to launch a browser and navigate to each configured page
-- Captures a full-page screenshot at each configured viewport size (desktop/tablet/mobile)
+- Captures a full-page screenshot at each configured viewport size (desktop 1440×900, tablet 768×1024, mobile 390×844)
 - Saves screenshots into a tagged folder (e.g., `screenshots/baseline/`, `screenshots/current/`)
 
 ```
@@ -47,14 +47,16 @@ screenshots/
   "viewport": "desktop",
   "pixelDiffCount": 4820,
   "percentChanged": 1.3,
-  "diffImagePath": "diffs/home-desktop.png"
+  "diffImagePath": "diffs/home-desktop.png",
+  "baselineImagePath": "screenshots/baseline/desktop/home.png",
+  "currentImagePath": "screenshots/current/desktop/home.png"
 }
 ```
 
 ## 3. Judge Layer (`src/judge/`, Phase 2)
 
 - Takes each `DiffResult` (plus the baseline/current image pair and any configured "known dynamic regions")
-- Sends the diff to a vision-capable LLM with a structured prompt
+- Sends **all three images** (baseline, current, and diff) to a vision-capable LLM with a structured prompt — the diff image alone only shows *where* pixels changed, while the baseline/current pair shows *what* changed
 - LLM returns:
   - **Verdict:** Real Bug / Acceptable Change / Uncertain
   - **Confidence** (1–10)
@@ -83,5 +85,6 @@ All configuration lives in `.env` (see `.env.example`):
 
 - `TARGET_BASE_URL` — base URL of the app under test
 - `TARGET_PAGES` — comma-separated list of page paths to capture
+- `OUTPUT_DIR` — where screenshots are stored (defaults to `screenshots`)
 - `LLM_API_KEY` — API key for the judgment layer's vision LLM calls
-- `DATABASE_URL` — SQLite path (defaults to `./pixelguard.db`)
+- `DATABASE_URL` — SQLite location, e.g. `sqlite:./pixelguard.db` (the default). The `sqlite:` prefix is stripped by `sqlitePathFromUrl()` in `config.ts`, and the resulting `Settings.databasePath` is what gets passed to better-sqlite3

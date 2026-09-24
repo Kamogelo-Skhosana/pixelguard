@@ -15,14 +15,15 @@ export interface ViewportConfig {
 
 export const DEFAULT_VIEWPORTS: ViewportConfig[] = [
   { name: "desktop", width: 1440, height: 900 },
+  { name: "tablet", width: 768, height: 1024 },
   { name: "mobile", width: 390, height: 844 },
 ];
 
 export async function captureAllPages(
-  baseUrl: string,
-  pages: string[],
-  viewports: ViewportConfig[],
-  tag: string
+  _baseUrl: string,
+  _pages: string[],
+  _viewports: ViewportConfig[],
+  _tag: string
 ): Promise<void> {
   // TODO (P007): for each page x viewport combination, launch a page
   // (browser.ts), navigate to baseUrl + page, take a full-page

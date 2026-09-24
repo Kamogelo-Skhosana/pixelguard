@@ -13,7 +13,10 @@ export async function launchBrowser(): Promise<Browser> {
   throw new Error("Not implemented");
 }
 
-export async function newPage(browser: Browser, viewport: { width: number; height: number }): Promise<Page> {
+export async function newPage(
+  _browser: Browser,
+  _viewport: { width: number; height: number }
+): Promise<Page> {
   // TODO (P006): create a new browser context with the given viewport, return a page.
   throw new Error("Not implemented");
 }

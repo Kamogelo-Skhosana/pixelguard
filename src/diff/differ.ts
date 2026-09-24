@@ -7,11 +7,11 @@
 import type { DiffResult } from "./models.js";
 
 export async function diffImages(
-  baselinePath: string,
-  currentPath: string,
-  outputDiffPath: string,
-  page: string,
-  viewport: string
+  _baselinePath: string,
+  _currentPath: string,
+  _outputDiffPath: string,
+  _page: string,
+  _viewport: string
 ): Promise<DiffResult> {
   // TODO (P012): load both PNGs (pngjs), run pixelmatch, write the
   // diff image to outputDiffPath.

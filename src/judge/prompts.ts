@@ -5,9 +5,13 @@
  */
 
 export const JUDGE_PROMPT_TEMPLATE = `
-You are a senior QA engineer reviewing a visual diff between a baseline
-and current screenshot of a web page. Decide whether this difference is
-a real visual bug or an acceptable/expected change.
+You are a senior QA engineer reviewing a visual change to a web page.
+You are given three images, in this order:
+  1. BASELINE — the page before the change
+  2. CURRENT  — the page after the change
+  3. DIFF     — changed pixels highlighted
+Compare BASELINE and CURRENT (using DIFF to locate the changes) and decide
+whether the difference is a real visual bug or an acceptable/expected change.
 
 Page: {page}
 Viewport: {viewport}

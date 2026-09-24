@@ -4,7 +4,7 @@
  * Tickets: P021-P028
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it } from "vitest";
 
 describe("judgeDiff", () => {
   it.todo("populates verdict, confidence, and explanation from a mocked LLM response (P025)");

@@ -5,7 +5,7 @@
  * Tickets: P044, P045
  */
 
-export async function acceptAsBaseline(currentTag: string): Promise<void> {
+export async function acceptAsBaseline(_currentTag: string): Promise<void> {
   // TODO (P044): copy screenshots/<currentTag>/ over screenshots/baseline/,
   // recording the change in the baseline history.
   throw new Error("Not implemented");

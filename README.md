@@ -85,8 +85,11 @@ pixelguard/
 │   └── baseline/               # Sample baseline screenshots for testing the diff engine
 ├── .env.example
 ├── .gitignore
+├── eslint.config.js           # ESLint 9 flat config
 ├── package.json
-├── tsconfig.json
+├── package-lock.json
+├── tsconfig.json              # Type-checking config (src + tests)
+├── tsconfig.build.json        # Build config (src → dist)
 ├── CONTRIBUTING.md
 └── LICENSE
 ```

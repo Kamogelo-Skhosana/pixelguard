@@ -4,7 +4,7 @@
  * Tickets: P012-P014
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it } from "vitest";
 
 describe("diffImages", () => {
   it.todo("returns a DiffResult with correct pixelDiffCount for a known image pair (P014)");

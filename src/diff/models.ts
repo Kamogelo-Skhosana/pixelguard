@@ -11,6 +11,8 @@ export interface DiffResult {
   pixelDiffCount: number;
   percentChanged: number;
   diffImagePath: string;
+  baselineImagePath: string;
+  currentImagePath: string;
 
   // Populated later by the judge layer (Phase 2) — see P024
   verdict?: "Real Bug" | "Acceptable Change" | "Uncertain";

@@ -10,11 +10,12 @@ import type { ChangeContext } from "./context.js";
 import type { LLMClient } from "./llmClient.js";
 
 export async function judgeDiff(
-  diff: DiffResult,
-  context: ChangeContext,
-  llm: LLMClient
+  _diff: DiffResult,
+  _context: ChangeContext,
+  _llm: LLMClient
 ): Promise<DiffResult> {
-  // TODO (P023): build the prompt (prompts.ts), call llm.judge(),
+  // TODO (P023): build the prompt (prompts.ts), load the baseline,
+  // current, and diff images as base64, call llm.judge(),
   // parse the structured JSON response, and populate diff.verdict,
   // diff.confidence, diff.explanation.
   throw new Error("Not implemented");
@@ -27,7 +28,7 @@ export interface RunSummary {
   uncertain: number;
 }
 
-export function summarizeRun(diffs: DiffResult[]): RunSummary {
+export function summarizeRun(_diffs: DiffResult[]): RunSummary {
   // TODO (P026/P027): roll up per-page verdicts into a run-level summary.
   throw new Error("Not implemented");
 }

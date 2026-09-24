@@ -15,15 +15,17 @@ export function createApiRouter(): express.Router {
     res.status(501).json({ error: "Not implemented" });
   });
 
-  router.get("/runs/:id", (_req, res) => {
-    // TODO (P037): query page_diffs for the given run id, return
-    // the full verdict list.
-    res.status(501).json({ error: "Not implemented" });
-  });
-
+  // NOTE: /runs/trend must be registered before /runs/:id, otherwise
+  // Express matches "trend" as an :id value.
   router.get("/runs/trend", (_req, res) => {
     // TODO (P038): aggregate regression counts per run date for a
     // trend chart.
+    res.status(501).json({ error: "Not implemented" });
+  });
+
+  router.get("/runs/:id", (_req, res) => {
+    // TODO (P037): query page_diffs for the given run id, return
+    // the full verdict list.
     res.status(501).json({ error: "Not implemented" });
   });
 

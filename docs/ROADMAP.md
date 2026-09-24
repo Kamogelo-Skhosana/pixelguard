@@ -45,7 +45,7 @@ The same CLI now runs the full pipeline: capture → diff → **AI-judged verdic
 A deployed (or locally runnable) web dashboard showing past runs, a side-by-side diff viewer per page, a trend view of regressions over time, and a one-click way to accept a confirmed change as the new baseline. This is the portfolio-ready version.
 
 **Epics covered:**
-- FastAPI-equivalent (Express/Fastify) backend routes for run history
+- Express backend routes for run history
 - Dashboard frontend (run list, diff viewer, trend chart)
 - Baseline management (accept new baseline, baseline versioning)
 - Deployment (Docker Compose or a simple hosted deploy)

@@ -4,7 +4,7 @@
  * Tickets: P006-P011
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it } from "vitest";
 
 describe("captureAllPages", () => {
   it.todo("saves a screenshot per page/viewport combination under the given tag (P007-P009)");
