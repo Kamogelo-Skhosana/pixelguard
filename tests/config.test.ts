@@ -63,6 +63,7 @@ describe("loadSettings", () => {
       targetPages: ["/"],
       viewports: DEFAULT_VIEWPORTS,
       outputDir: "screenshots",
+      diffDir: "diffs",
       llmApiKey: "",
       llmModel: "claude-sonnet-4-6",
       databaseUrl: "sqlite:./pixelguard.db",
@@ -76,6 +77,7 @@ describe("loadSettings", () => {
       TARGET_PAGES: "/,/about",
       VIEWPORTS: "wide:1920x1080",
       OUTPUT_DIR: "shots",
+      DIFF_DIR: "out/diffs",
       LLM_API_KEY: "key",
       LLM_MODEL: "some-model",
       DATABASE_URL: "sqlite:./runs.db",
@@ -83,6 +85,7 @@ describe("loadSettings", () => {
     expect(s.targetPages).toEqual(["/", "/about"]);
     expect(s.viewports).toEqual([{ name: "wide", width: 1920, height: 1080 }]);
     expect(s.outputDir).toBe("shots");
+    expect(s.diffDir).toBe("out/diffs");
     expect(s.llmApiKey).toBe("key");
     expect(s.llmModel).toBe("some-model");
     expect(s.databasePath).toBe("./runs.db");

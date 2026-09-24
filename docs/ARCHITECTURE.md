@@ -51,12 +51,20 @@ screenshots/
   "page": "home",
   "viewport": "desktop",
   "pixelDiffCount": 4820,
-  "percentChanged": 1.3,
-  "diffImagePath": "diffs/home-desktop.png",
+  "totalPixels": 3240000,
+  "percentChanged": 0.1488,
+  "changed": true,
+  "sizeChanged": false,
+  "baselineSize": { "width": 1440, "height": 2250 },
+  "currentSize": { "width": 1440, "height": 2250 },
+  "diffImagePath": "diffs/desktop/home.png",
   "baselineImagePath": "screenshots/baseline/desktop/home.png",
   "currentImagePath": "screenshots/current/desktop/home.png"
 }
 ```
+
+- `percentChanged` is rounded to 4 decimal places, but a real change is never reported as 0%
+- When a page's height or width changed, the smaller screenshot is padded and the extra area counts as changed (`sizeChanged: true`)
 
 ## 3. Judge Layer (`src/judge/`, Phase 2)
 
@@ -73,6 +81,19 @@ screenshots/
 - Console output (Phase 1) and Markdown report (Phase 2) rendering
 - SQLite persistence of every run's results (Phase 2+)
 - Phase 3 dashboard: run history, side-by-side diff viewer, trend chart, and "accept as new baseline" action
+
+## CLI
+
+```bash
+pixelguard capture --tag <name>
+pixelguard diff --baseline <tag> --current <tag> [--output diffs.json] [--threshold 0.1] [--fail-on-change]
+```
+
+- `capture` screenshots every page in `TARGET_PAGES` at every viewport into `screenshots/<tag>/`
+- `diff` pairs the two captures using their manifests, writes diff images to `diffs/<baseline>-vs-<current>/<viewport>/<page>.png`, prints a table, and lists anything it couldn't compare (new, removed or failed pages)
+- `--output` also writes the results as JSON; `--threshold` sets pixel colour sensitivity (0-1); `--fail-on-change` makes the command fail when anything changed, for CI
+
+Exit codes: `0` success · `1` changes found with `--fail-on-change` · `2` error (bad config or arguments, failed screenshots, missing capture)
 
 ## Data Flow (end-to-end)
 
@@ -92,6 +113,7 @@ All configuration lives in `.env` (see `.env.example`):
 - `TARGET_PAGES` — comma-separated list of page paths to capture
 - `VIEWPORTS` — optional override, e.g. `desktop:1440x900,mobile:390x844` (defaults to desktop/tablet/mobile)
 - `OUTPUT_DIR` — where screenshots are stored (defaults to `screenshots`)
+- `DIFF_DIR` — where diff images are written (defaults to `diffs`)
 - `LLM_API_KEY` — API key for the judgment layer's vision LLM calls (not needed for Phase 1)
 - `DATABASE_URL` — SQLite location, e.g. `sqlite:./pixelguard.db` (the default). The `sqlite:` prefix is stripped by `sqlitePathFromUrl()` in `config.ts`, and the resulting `Settings.databasePath` is what gets passed to better-sqlite3
 

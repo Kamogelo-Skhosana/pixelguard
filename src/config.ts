@@ -31,6 +31,8 @@ export interface Settings {
   viewports: ViewportConfig[];
   /** Root folder for screenshots (screenshots/<tag>/<viewport>/<page>.png). */
   outputDir: string;
+  /** Root folder for diff images (diffs/<baseline>-vs-<current>/<viewport>/<page>.png). */
+  diffDir: string;
   /** Empty until the judge layer is used (Phase 2). */
   llmApiKey: string;
   llmModel: string;
@@ -114,6 +116,7 @@ const EnvSchema = z.object({
   TARGET_PAGES: z.string().default("/"),
   VIEWPORTS: z.string().optional(),
   OUTPUT_DIR: z.string().trim().min(1, "OUTPUT_DIR cannot be empty").default("screenshots"),
+  DIFF_DIR: z.string().trim().min(1, "DIFF_DIR cannot be empty").default("diffs"),
   LLM_API_KEY: z.string().default(""),
   LLM_MODEL: z.string().trim().min(1, "LLM_MODEL cannot be empty").default("claude-sonnet-4-6"),
   DATABASE_URL: z
@@ -163,6 +166,7 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     targetPages,
     viewports,
     outputDir: data.OUTPUT_DIR,
+    diffDir: data.DIFF_DIR,
     llmApiKey: data.LLM_API_KEY,
     llmModel: data.LLM_MODEL,
     databaseUrl: data.DATABASE_URL,

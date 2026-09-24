@@ -56,8 +56,10 @@ cp .env.example .env
 # Capture a baseline, then capture + diff again after a change (Phase 1+)
 npm run pixelguard -- capture --tag baseline
 npm run pixelguard -- capture --tag current
-npm run pixelguard -- diff --baseline baseline --current current
+npm run pixelguard -- diff --baseline baseline --current current --output diffs.json
 ```
+
+Add `--fail-on-change` to make the diff fail (exit code 1) when anything changed — handy in CI.
 
 Full setup instructions are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -74,7 +76,8 @@ pixelguard/
 │   ├── judge/                 # AI judgment layer — verdict + explanation per diff
 │   ├── report/                # Report generation (console, markdown, JSON) + persistence
 │   ├── dashboard/              # Phase 3 — API + web dashboard
-│   ├── cli.ts                 # CLI entry point
+│   ├── cli.ts                 # CLI entry point (argument parsing)
+│   ├── commands.ts            # capture / diff command logic
 │   └── config.ts               # Configuration loading (.env, target profiles)
 ├── tests/                      # Unit + integration tests, mirrors src/ layout
 │   └── fixtures/diff/          # Sample baseline/current image pairs for diff tests

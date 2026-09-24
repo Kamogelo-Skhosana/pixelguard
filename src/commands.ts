@@ -1,0 +1,155 @@
+/**
+ * Implementation of the `pixelguard capture` and `pixelguard diff` commands.
+ *
+ * Kept separate from cli.ts (argument parsing) so the commands can be tested
+ * directly. Each returns a process exit code:
+ *
+ *   0 — success
+ *   1 — changes were found and --fail-on-change was set (diff only)
+ *   2 — something went wrong (bad config, failed screenshots, missing capture, ...)
+ *
+ * Ticket: P015
+ */
+
+import { captureAllPages, type PageCaptureResult } from "./capture/capture.js";
+import type { Settings } from "./config.js";
+import type { CompareOptions } from "./diff/imageCompare.js";
+import { diffTags } from "./diff/runDiff.js";
+import { formatDiffResults, formatPercent } from "./report/console.js";
+import { exportJson } from "./report/jsonExport.js";
+
+export const EXIT_OK = 0;
+export const EXIT_CHANGES = 1;
+export const EXIT_ERROR = 2;
+
+export interface CommandIO {
+  out: (line: string) => void;
+  err: (line: string) => void;
+  colour: boolean;
+}
+
+export const consoleIO = (colour: boolean): CommandIO => ({
+  out: (line) => console.log(line),
+  err: (line) => console.error(line),
+  colour,
+});
+
+export interface CaptureCommandOptions {
+  tag: string;
+}
+
+export async function runCapture(
+  settings: Settings,
+  options: CaptureCommandOptions,
+  io: CommandIO
+): Promise<number> {
+  const { targetBaseUrl, targetPages, viewports, outputDir } = settings;
+  io.out(
+    `Capturing ${targetPages.length} page(s) x ${viewports.length} viewport(s) ` +
+      `from ${targetBaseUrl} as "${options.tag}"...`
+  );
+
+  const onPage = (page: PageCaptureResult) => {
+    const ok = page.viewports.filter((v) => v.ok).map((v) => v.viewport);
+    const failed = page.viewports.filter((v) => !v.ok);
+    const mark = failed.length === 0 ? "✓" : ok.length === 0 ? "✗" : "!";
+    let line = `  ${mark} ${page.page}`;
+    if (ok.length > 0) line += `  ${ok.join(", ")}`;
+    io.out(line);
+    for (const f of failed) {
+      if (!f.ok) io.err(`      ${f.viewport}: ${f.error.message}`);
+    }
+  };
+
+  try {
+    const run = await captureAllPages({
+      baseUrl: targetBaseUrl,
+      pages: targetPages,
+      viewports,
+      outputDir,
+      tag: options.tag,
+      onPage,
+    });
+    io.out("");
+    io.out(`Saved ${run.succeeded} screenshot(s) to ${run.dir}`);
+    if (run.failed > 0) {
+      io.err(`${run.failed} screenshot(s) failed — see above.`);
+      return EXIT_ERROR;
+    }
+    return EXIT_OK;
+  } catch (err) {
+    io.err(`Capture failed: ${(err as Error).message}`);
+    return EXIT_ERROR;
+  }
+}
+
+export interface DiffCommandOptions {
+  baseline: string;
+  current: string;
+  /** Write the JSON report here. */
+  output?: string;
+  /** Markdown report path (Phase 2 — not available yet). */
+  report?: string;
+  threshold?: number;
+  failOnChange?: boolean;
+}
+
+export async function runDiff(
+  settings: Settings,
+  options: DiffCommandOptions,
+  io: CommandIO
+): Promise<number> {
+  if (options.report) {
+    io.err("Note: --report (AI-judged Markdown report) arrives in Phase 2 and is ignored for now.");
+  }
+
+  const compare: CompareOptions = {};
+  if (options.threshold !== undefined) compare.threshold = options.threshold;
+
+  try {
+    io.out(`Comparing "${options.baseline}" with "${options.current}"...`);
+    io.out("");
+    const run = await diffTags({
+      outputDir: settings.outputDir,
+      diffDir: settings.diffDir,
+      baselineTag: options.baseline,
+      currentTag: options.current,
+      compare,
+    });
+
+    io.out(formatDiffResults(run.results, { colour: io.colour }));
+
+    if (run.skipped.length > 0) {
+      io.err("");
+      io.err(`Skipped ${run.skipped.length} screenshot(s) that couldn't be compared:`);
+      for (const s of run.skipped) io.err(`  - ${s.page} / ${s.viewport}: ${s.reason}`);
+    }
+
+    if (run.results.length > 0) {
+      io.out("");
+      io.out(`Diff images: ${run.dir}`);
+    }
+
+    if (options.output) {
+      await exportJson(run.results, options.output, {
+        baselineTag: options.baseline,
+        currentTag: options.current,
+        targetUrl: run.targetUrl,
+      });
+      io.out(`JSON results: ${options.output}`);
+    }
+
+    const changed = run.results.filter((r) => r.changed);
+    if (options.failOnChange && changed.length > 0) {
+      const worst = Math.max(...changed.map((r) => r.percentChanged));
+      io.err(
+        `Failing because ${changed.length} screenshot(s) changed (up to ${formatPercent(worst)}).`
+      );
+      return EXIT_CHANGES;
+    }
+    return EXIT_OK;
+  } catch (err) {
+    io.err(`Diff failed: ${(err as Error).message}`);
+    return EXIT_ERROR;
+  }
+}

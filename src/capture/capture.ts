@@ -219,7 +219,8 @@ export async function capturePages(
   pages: string[],
   viewports: ViewportConfig[],
   outputPathFor: (page: { page: string; name: string }, viewport: ViewportConfig) => string,
-  options: ScreenshotOptions = {}
+  options: ScreenshotOptions = {},
+  onPage?: (result: PageCaptureResult) => void
 ): Promise<PageCaptureResult[]> {
   const named = pages.map((page) => ({ page, name: pageName(page) }));
 
@@ -245,7 +246,9 @@ export async function capturePages(
       (viewport) => outputPathFor(entry, viewport),
       options
     );
-    results.push({ ...entry, url, viewports: outcomes });
+    const pageResult = { ...entry, url, viewports: outcomes };
+    results.push(pageResult);
+    onPage?.(pageResult);
   }
   return results;
 }
@@ -260,6 +263,8 @@ export interface CaptureRunOptions {
   tag: string;
   launch?: LaunchOptions;
   screenshot?: ScreenshotOptions;
+  /** Called after each page finishes (all its viewports), e.g. to print progress. */
+  onPage?: (result: PageCaptureResult) => void;
 }
 
 export interface CaptureRunResult {
@@ -296,7 +301,8 @@ export async function captureAllPages(options: CaptureRunOptions): Promise<Captu
           pages,
           viewports,
           (page, viewport) => join(tempDir, viewport.name, `${page.name}.png`),
-          options.screenshot
+          options.screenshot,
+          options.onPage
         ),
       options.launch
     );
