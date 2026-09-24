@@ -83,8 +83,11 @@ screenshots/
 
 All configuration lives in `.env` (see `.env.example`):
 
-- `TARGET_BASE_URL` — base URL of the app under test
+- `TARGET_BASE_URL` — base URL of the app under test (**required**, must start with `http://` or `https://`)
 - `TARGET_PAGES` — comma-separated list of page paths to capture
+- `VIEWPORTS` — optional override, e.g. `desktop:1440x900,mobile:390x844` (defaults to desktop/tablet/mobile)
 - `OUTPUT_DIR` — where screenshots are stored (defaults to `screenshots`)
-- `LLM_API_KEY` — API key for the judgment layer's vision LLM calls
+- `LLM_API_KEY` — API key for the judgment layer's vision LLM calls (not needed for Phase 1)
 - `DATABASE_URL` — SQLite location, e.g. `sqlite:./pixelguard.db` (the default). The `sqlite:` prefix is stripped by `sqlitePathFromUrl()` in `config.ts`, and the resulting `Settings.databasePath` is what gets passed to better-sqlite3
+
+`loadSettings()` in `src/config.ts` validates these values and throws a `ConfigError` listing every problem at once, pointing back to `.env.example`.

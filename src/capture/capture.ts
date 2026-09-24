@@ -7,17 +7,11 @@
  * Tickets: P007, P008, P009, P010
  */
 
-export interface ViewportConfig {
-  name: string; // e.g. "desktop", "mobile"
-  width: number;
-  height: number;
-}
+import type { ViewportConfig } from "../config.js";
 
-export const DEFAULT_VIEWPORTS: ViewportConfig[] = [
-  { name: "desktop", width: 1440, height: 900 },
-  { name: "tablet", width: 768, height: 1024 },
-  { name: "mobile", width: 390, height: 844 },
-];
+// Viewport definitions live in config.ts (P011) so they can be overridden
+// from .env; re-exported here for convenience.
+export { DEFAULT_VIEWPORTS, type ViewportConfig } from "../config.js";
 
 export async function captureAllPages(
   _baseUrl: string,
