@@ -6,14 +6,14 @@
 
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PNG } from "pngjs";
 import type { Browser } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeBrowser, launchBrowser, NavigationError } from "../src/capture/browser.js";
-import { captureUrl } from "../src/capture/capture.js";
+import { captureUrl, captureViewports, DEFAULT_VIEWPORTS } from "../src/capture/capture.js";
 
 const TALL_PAGE = `<!doctype html>
 <html><head><style>
@@ -37,6 +37,14 @@ const TALL_PAGE = `<!doctype html>
   </script>
 </body></html>`;
 
+// Background colour depends on screen width: red on phones, green on tablets, blue on desktops.
+const RESPONSIVE_PAGE = `<!doctype html>
+<html><head><style>
+  body { margin: 0; height: 100vh; background: rgb(255, 0, 0); }
+  @media (min-width: 600px) { body { background: rgb(0, 255, 0); } }
+  @media (min-width: 1024px) { body { background: rgb(0, 0, 255); } }
+</style></head><body></body></html>`;
+
 let server: Server;
 let baseUrl: string;
 let browser: Browser;
@@ -49,7 +57,10 @@ function pixelAt(png: PNG, x: number, y: number): [number, number, number] {
 
 beforeAll(async () => {
   server = createServer((req, res) => {
-    if (req.url === "/tall") {
+    if (req.url === "/responsive") {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(RESPONSIVE_PAGE);
+    } else if (req.url === "/tall") {
       res.writeHead(200, { "Content-Type": "text/html" });
       res.end(TALL_PAGE);
     } else {
@@ -118,6 +129,60 @@ describe("captureUrl", () => {
   });
 });
 
+describe("captureViewports", () => {
+  it("captures one screenshot per viewport at the right size (P008)", async () => {
+    const outcomes = await captureViewports(
+      browser,
+      `${baseUrl}/responsive`,
+      DEFAULT_VIEWPORTS,
+      (v) => join(outDir, "viewports", `${v.name}.png`)
+    );
+
+    expect(outcomes.map((o) => o.viewport)).toEqual(["desktop", "tablet", "mobile"]);
+    expect(outcomes.every((o) => o.ok)).toBe(true);
+
+    const expectedColour: Record<string, [number, number, number]> = {
+      desktop: [0, 0, 255],
+      tablet: [0, 255, 0],
+      mobile: [255, 0, 0],
+    };
+    for (const viewport of DEFAULT_VIEWPORTS) {
+      const png = PNG.sync.read(await readFile(join(outDir, "viewports", `${viewport.name}.png`)));
+      expect(png.width).toBe(viewport.width);
+      expect(png.height).toBe(viewport.height);
+      expect(pixelAt(png, 10, 10)).toEqual(expectedColour[viewport.name]);
+    }
+  });
+
+  it("keeps going when one viewport fails", async () => {
+    // A file where a folder should be makes the tablet capture fail to save.
+    const blocker = join(outDir, "blocker");
+    await writeFile(blocker, "not a folder");
+
+    const outcomes = await captureViewports(
+      browser,
+      `${baseUrl}/responsive`,
+      DEFAULT_VIEWPORTS,
+      (v) =>
+        v.name === "tablet" ? join(blocker, "tablet.png") : join(outDir, "partial", `${v.name}.png`)
+    );
+
+    expect(outcomes.map((o) => [o.viewport, o.ok])).toEqual([
+      ["desktop", true],
+      ["tablet", false],
+      ["mobile", true],
+    ]);
+    const failed = outcomes[1];
+    expect(!failed.ok && failed.error).toBeInstanceOf(Error);
+  });
+
+  it("returns no outcomes for an empty viewport list", async () => {
+    expect(await captureViewports(browser, `${baseUrl}/responsive`, [], () => "unused")).toEqual(
+      []
+    );
+  });
+});
+
 describe("captureAllPages", () => {
-  it.todo("saves a screenshot per page/viewport combination under the given tag (P008-P010)");
+  it.todo("saves a screenshot per page/viewport combination under the given tag (P009-P010)");
 });

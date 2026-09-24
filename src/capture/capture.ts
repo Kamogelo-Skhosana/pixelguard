@@ -126,14 +126,54 @@ export async function captureUrl(
   }
 }
 
+export type ViewportCaptureOutcome =
+  | { viewport: string; ok: true; result: ScreenshotResult }
+  | { viewport: string; ok: false; error: Error };
+
+/**
+ * Captures url once per viewport (one after another, each in a fresh page).
+ * outputPathFor decides where each viewport's PNG is saved.
+ *
+ * A failure in one viewport doesn't stop the others: every viewport gets an
+ * outcome, either ok with its ScreenshotResult or not ok with the error.
+ */
+export async function captureViewports(
+  browser: Browser,
+  url: string,
+  viewports: ViewportConfig[],
+  outputPathFor: (viewport: ViewportConfig) => string,
+  options: ScreenshotOptions = {}
+): Promise<ViewportCaptureOutcome[]> {
+  const outcomes: ViewportCaptureOutcome[] = [];
+  for (const viewport of viewports) {
+    try {
+      const result = await captureUrl(
+        browser,
+        url,
+        { width: viewport.width, height: viewport.height },
+        outputPathFor(viewport),
+        options
+      );
+      outcomes.push({ viewport: viewport.name, ok: true, result });
+    } catch (err) {
+      outcomes.push({
+        viewport: viewport.name,
+        ok: false,
+        error: err instanceof Error ? err : new Error(String(err)),
+      });
+    }
+  }
+  return outcomes;
+}
+
 export async function captureAllPages(
   _baseUrl: string,
   _pages: string[],
   _viewports: ViewportConfig[],
   _tag: string
 ): Promise<void> {
-  // TODO (P008/P009): for each page x viewport combination, call
-  // captureUrl() with baseUrl + page and save it to
+  // TODO (P009): for each page, call captureViewports() with baseUrl + page
+  // and save each viewport's screenshot to
   // `screenshots/<tag>/<viewport>/<page>.png` (see P010 for the folder convention).
   throw new Error("Not implemented");
 }
