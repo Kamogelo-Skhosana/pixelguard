@@ -75,7 +75,7 @@ Suggested labels: `phase-1`, `phase-2`, `phase-3`, plus an epic label per group 
 
 ### Epic: Persistence
 
-- [ ] **P032** — Set up SQLite schema: `runs` table, `page_diffs` table
+- [x] **P032** — Set up SQLite schema: `runs` table, `page_diffs` table
 - [ ] **P033** — Implement save-run-to-database logic after each run
 
 ### Epic: Phase 2 Wrap-up
