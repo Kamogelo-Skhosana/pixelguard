@@ -98,7 +98,8 @@ screenshots/
   - Before sending, the three images are cropped (full width) to the rows around the changed pixels plus 250px of context (at least 1000 rows, so the surrounding layout is visible; shorter screenshots are sent whole), and scaled down only if still over 3000px — so tall full-page screenshots stay sharp where it matters and within API limits. The prompt says what part of the page is shown, and region coordinates are converted to match
   - The reply is parsed leniently (code fences and surrounding text are fine) and validated; an unreadable reply is asked again once
   - If the call fails or the reply stays unreadable, the result is marked `Uncertain` with a `judgeError`, so one bad screenshot never stops the run
-  - Screenshots are judged 2 at a time; `pixelguard diff --judge` runs this and shows a Verdict column
+  - The parser also ignores extra keys a model might add (e.g. `"reasoning"`) instead of rejecting a good verdict
+- Screenshots are judged 2 at a time; `pixelguard diff --judge` runs this and shows a Verdict column
 - Findings are rolled up per page and per run into a pass/fail/review summary
 
 ### Change context (`src/judge/context.ts`)
@@ -199,3 +200,11 @@ All configuration lives in `.env` (see `.env.example`):
 - `DATABASE_URL` — SQLite location, e.g. `sqlite:./pixelguard.db` (the default). The `sqlite:` prefix is stripped by `sqlitePathFromUrl()` in `config.ts`, and the resulting `Settings.databasePath` is what gets passed to better-sqlite3
 
 `loadSettings()` in `src/config.ts` validates these values and throws a `ConfigError` listing every problem at once, pointing back to `.env.example`.
+
+## Testing the judge
+
+Tests never call a real LLM API (so CI needs no API key and costs nothing):
+
+- `tests/helpers/mockLLM.ts` — a shared `MockLLM` with queued or per-screenshot replies, ready-made realistic replies (`REPLIES`: clean, fenced, with extra text or fields, and several broken ones) and API errors (`ERRORS`)
+- `tests/setup/blockLiveLLM.ts` — runs before every test file and blocks any request to `api.anthropic.com`, so an accidental live call fails immediately
+- `tests/judgeScenarios.test.ts` — real sample screenshots and the real diff engine and judge, with only the LLM mocked: every verdict, messy-but-valid replies, unreadable replies, API failures, and a mixed multi-page run

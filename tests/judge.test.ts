@@ -205,10 +205,6 @@ describe("judgeDiffs (P023)", () => {
   });
 });
 
-describe("judgeDiff with a fully mocked LLM (P025)", () => {
-  it.todo("covers every verdict and failure scenario using shared mocked LLM responses");
-});
-
 describe("summarizeRun", () => {
   it.todo("correctly counts real bugs, acceptable changes, and uncertain verdicts (P026/P027)");
 });

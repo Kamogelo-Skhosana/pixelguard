@@ -3,6 +3,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
+    // Blocks live LLM API calls in every test run (P025).
+    setupFiles: ["tests/setup/blockLiveLLM.ts"],
     // Browser tests launch Chromium, which can be slow on CI runners.
     testTimeout: 30_000,
     hookTimeout: 30_000,

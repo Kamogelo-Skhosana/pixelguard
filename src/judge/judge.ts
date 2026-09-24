@@ -25,7 +25,7 @@ export class JudgeParseError extends Error {
 
 /**
  * Extracts and validates the verdict JSON from the model's reply.
- * Tolerates markdown code fences and text around the JSON object.
+ * Tolerates markdown code fences, text around the JSON object, and extra keys.
  */
 export function parseJudgeResponse(reply: string): JudgeResponse {
   const snippet = reply.length > 200 ? `${reply.slice(0, 200)}...` : reply;
@@ -45,7 +45,9 @@ export function parseJudgeResponse(reply: string): JudgeResponse {
     );
   }
 
-  const parsed = JudgeResponseSchema.safeParse(data);
+  // Extra keys the model adds (e.g. "reasoning") are dropped rather than
+  // rejected, so a good verdict isn't thrown away over an unused field.
+  const parsed = JudgeResponseSchema.strip().safeParse(data);
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => (i.path.length ? `${i.path.join(".")}: ${i.message}` : i.message))
