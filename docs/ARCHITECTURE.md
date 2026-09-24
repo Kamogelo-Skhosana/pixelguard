@@ -145,6 +145,7 @@ pixelguard diff --baseline <tag> --current <tag> [--output diffs.json] [--thresh
 
 - `capture` screenshots every page in `TARGET_PAGES` at every viewport into `screenshots/<tag>/`
 - `diff` pairs the two captures using their manifests, writes diff images to `diffs/<baseline>-vs-<current>/<viewport>/<page>.png`, prints a table, and lists anything it couldn't compare (new, removed or failed pages)
+- `--change "<text>"` (or `--change-file notes.txt`, or the `PIXELGUARD_CHANGE` environment variable in CI) describes what changed in this build; it's shown in the output, saved in the JSON report, and given to the AI judge in Phase 2. Max 1000 characters; an explicit `--change-file` wins over `PIXELGUARD_CHANGE`
 - `--output` also writes the results as JSON; `--threshold` sets pixel colour sensitivity (0-1); `--fail-on-change` makes the command fail when anything changed, for CI
 
 Exit codes: `0` success · `1` changes found with `--fail-on-change` · `2` error (bad config or arguments, failed screenshots, missing capture)

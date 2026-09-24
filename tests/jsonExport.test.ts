@@ -79,6 +79,7 @@ describe("buildJsonReport", () => {
       baselineTag: "baseline",
       currentTag: "current",
       targetUrl: "https://example.com",
+      changeDescription: "New footer",
       generatedAt: new Date("2026-09-24T21:00:00.000Z"),
     });
     expect(report).toEqual({
@@ -87,6 +88,7 @@ describe("buildJsonReport", () => {
       baselineTag: "baseline",
       currentTag: "current",
       targetUrl: "https://example.com",
+      changeDescription: "New footer",
       summary: summarizeDiffs(results),
       results,
     });

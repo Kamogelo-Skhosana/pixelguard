@@ -15,7 +15,13 @@ import { captureAllPages, type PageCaptureResult } from "./capture/capture.js";
 import type { Settings } from "./config.js";
 import type { CompareOptions } from "./diff/imageCompare.js";
 import { diffTags } from "./diff/runDiff.js";
-import { loadDynamicRegions, type DynamicRegion } from "./judge/context.js";
+import { readFile } from "node:fs/promises";
+import {
+  loadDynamicRegions,
+  normalizeChangeDescription,
+  type ChangeContext,
+  type DynamicRegion,
+} from "./judge/context.js";
 import { formatDiffResults, formatPercent } from "./report/console.js";
 import { exportJson } from "./report/jsonExport.js";
 
@@ -114,6 +120,32 @@ export interface DiffCommandOptions {
   report?: string;
   threshold?: number;
   failOnChange?: boolean;
+  /** Short description of what changed in this build (P020). */
+  change?: string;
+  /** File containing the change description (alternative to change). */
+  changeFile?: string;
+}
+
+/** Reads the change description from --change or --change-file. */
+export async function resolveChangeDescription(options: {
+  change?: string;
+  changeFile?: string;
+}): Promise<string> {
+  if (options.change !== undefined && options.changeFile !== undefined) {
+    throw new Error("Use either --change or --change-file, not both.");
+  }
+  if (options.changeFile !== undefined) {
+    let text: string;
+    try {
+      text = await readFile(options.changeFile, "utf8");
+    } catch (err) {
+      throw new Error(
+        `Could not read --change-file ${options.changeFile}: ${(err as Error).message}`
+      );
+    }
+    return normalizeChangeDescription(text);
+  }
+  return normalizeChangeDescription(options.change);
 }
 
 export async function runDiff(
@@ -130,7 +162,15 @@ export async function runDiff(
 
   try {
     const regions = await loadRegions(settings, io);
+    const context: ChangeContext = {
+      dynamicRegions: regions,
+      changeDescription: await resolveChangeDescription(options),
+    };
     io.out(`Comparing "${options.baseline}" with "${options.current}"...`);
+    if (context.changeDescription) {
+      const [first, ...rest] = context.changeDescription.split("\n");
+      io.out(`What changed: ${first}${rest.length > 0 ? ` (+${rest.length} more line(s))` : ""}`);
+    }
     io.out("");
     const run = await diffTags({
       outputDir: settings.outputDir,
@@ -164,6 +204,7 @@ export async function runDiff(
         baselineTag: options.baseline,
         currentTag: options.current,
         targetUrl: run.targetUrl,
+        changeDescription: context.changeDescription,
       });
       io.out(`JSON results: ${options.output}`);
     }

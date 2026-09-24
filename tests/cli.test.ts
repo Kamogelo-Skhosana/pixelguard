@@ -250,6 +250,80 @@ describe("pixelguard CLI (P015)", () => {
     expect(bad.err).toContain("regions[0].label");
   });
 
+  describe("change description (P020)", () => {
+    const diffArgs = ["diff", "--baseline", "baseline", "--current", "same"];
+
+    it("--change is shown and saved in the JSON report", async () => {
+      const json = join(root, "change.json");
+      const r = await run([
+        ...diffArgs,
+        "--change",
+        "  Redesigned the checkout button ",
+        "--output",
+        json,
+      ]);
+      expect(r.code).toBe(EXIT_OK);
+      expect(r.out).toContain("What changed: Redesigned the checkout button");
+      expect((await readJsonReport(json)).changeDescription).toBe("Redesigned the checkout button");
+    });
+
+    it("--change-file reads a longer description", async () => {
+      const notes = join(root, "notes.txt");
+      await writeFile(notes, "New hero section\n- bigger heading\n- new colours\n");
+      const json = join(root, "change-file.json");
+      const r = await run([...diffArgs, "--change-file", notes, "--output", json]);
+      expect(r.out).toContain("What changed: New hero section (+2 more line(s))");
+      expect((await readJsonReport(json)).changeDescription).toBe(
+        "New hero section\n- bigger heading\n- new colours"
+      );
+    });
+
+    it("leaves changeDescription out of the JSON when none is given", async () => {
+      const json = join(root, "no-change.json");
+      await run([...diffArgs, "--output", json]);
+      expect((await readJsonReport(json)).changeDescription).toBeUndefined();
+    });
+
+    it("reads PIXELGUARD_CHANGE from the environment", async () => {
+      process.env.PIXELGUARD_CHANGE = "From CI: bump footer links";
+      try {
+        const r = await run(diffArgs);
+        expect(r.out).toContain("What changed: From CI: bump footer links");
+      } finally {
+        delete process.env.PIXELGUARD_CHANGE;
+      }
+    });
+
+    it("an explicit --change-file wins over PIXELGUARD_CHANGE", async () => {
+      const notes = join(root, "notes2.txt");
+      await writeFile(notes, "From the file");
+      process.env.PIXELGUARD_CHANGE = "From the environment";
+      try {
+        const r = await run([...diffArgs, "--change-file", notes]);
+        expect(r.code).toBe(EXIT_OK);
+        expect(r.out).toContain("What changed: From the file");
+      } finally {
+        delete process.env.PIXELGUARD_CHANGE;
+      }
+    });
+
+    it("rejects --change together with --change-file", async () => {
+      const r = await run([...diffArgs, "--change", "a", "--change-file", join(root, "notes.txt")]);
+      expect(r.code).toBe(EXIT_ERROR);
+      expect(r.err).toContain("either --change or --change-file");
+    });
+
+    it("exits 2 for a missing file or an over-long description", async () => {
+      const missing = await run([...diffArgs, "--change-file", join(root, "nope.txt")]);
+      expect(missing.code).toBe(EXIT_ERROR);
+      expect(missing.err).toContain("Could not read --change-file");
+
+      const long = await run([...diffArgs, "--change", "x".repeat(1001)]);
+      expect(long.code).toBe(EXIT_ERROR);
+      expect(long.err).toContain("keep it under 1000");
+    });
+  });
+
   it("treats --help as success", () => {
     expect(exitCodeForError(new CommanderError(0, "commander.helpDisplayed", ""))).toBe(0);
   });

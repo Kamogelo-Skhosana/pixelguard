@@ -146,6 +146,32 @@ export function defaultChangeContext(): ChangeContext {
   return { dynamicRegions: [], changeDescription: "" };
 }
 
+/** Longest change description accepted (it goes into every judge prompt). */
+export const MAX_CHANGE_DESCRIPTION_LENGTH = 1000;
+
+/**
+ * Cleans up a change description: trims it, normalises line endings, and
+ * collapses runs of blank lines. Throws if it's longer than
+ * MAX_CHANGE_DESCRIPTION_LENGTH. Returns "" for empty input.
+ */
+export function normalizeChangeDescription(text: string | undefined): string {
+  if (!text) return "";
+  const cleaned = text
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (cleaned.length > MAX_CHANGE_DESCRIPTION_LENGTH) {
+    throw new Error(
+      `The change description is ${cleaned.length} characters; keep it under ` +
+        `${MAX_CHANGE_DESCRIPTION_LENGTH} (a short summary works best).`
+    );
+  }
+  return cleaned;
+}
+
 /** Default regions file, looked for in the current folder. */
 export const DEFAULT_REGIONS_FILE = "pixelguard.regions.json";
 

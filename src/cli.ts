@@ -6,6 +6,7 @@
  *   pixelguard capture --tag <name>
  *   pixelguard diff --baseline <tag> --current <tag> [--output diffs.json]
  *                   [--threshold 0.1] [--fail-on-change]
+ *                   [--change "<what changed>" | --change-file notes.txt]
  *
  * Exit codes: 0 success, 1 changes found with --fail-on-change, 2 error.
  *
@@ -14,7 +15,7 @@
 
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { Command, CommanderError, InvalidArgumentError } from "commander";
+import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
 import { consoleIO, EXIT_ERROR, runCapture, runDiff, type CommandIO } from "./commands.js";
 import { ConfigError, loadSettings, type Settings } from "./config.js";
 import { shouldUseColour } from "./report/console.js";
@@ -80,16 +81,34 @@ export function createProgram(deps: ProgramDeps = {}): Command {
     .option("--output <path>", "Write raw diff results as JSON")
     .option("--threshold <number>", "Pixel colour sensitivity, 0-1 (default 0.1)", parseThreshold)
     .option("--fail-on-change", "Exit with code 1 if any screenshot changed (useful in CI)")
+    .addOption(
+      new Option(
+        "--change <text>",
+        'Short description of what changed in this build, e.g. "Redesigned the checkout button"'
+      ).env("PIXELGUARD_CHANGE")
+    )
+    .option("--change-file <path>", "Read the change description from a file")
     .option("--report <path>", "Write the AI-judged Markdown report (Phase 2)")
     .action(
-      (opts: {
-        baseline: string;
-        current: string;
-        output?: string;
-        threshold?: number;
-        failOnChange?: boolean;
-        report?: string;
-      }) => withSettings((s) => runDiff(s, opts, io))
+      (
+        opts: {
+          baseline: string;
+          current: string;
+          output?: string;
+          threshold?: number;
+          failOnChange?: boolean;
+          report?: string;
+          change?: string;
+          changeFile?: string;
+        },
+        cmd: Command
+      ) => {
+        // An explicit --change-file wins over a PIXELGUARD_CHANGE set in the environment.
+        if (opts.changeFile !== undefined && cmd.getOptionValueSource("change") === "env") {
+          opts = { ...opts, change: undefined };
+        }
+        return withSettings((s) => runDiff(s, opts, io));
+      }
     );
 
   return program;

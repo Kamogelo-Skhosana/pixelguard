@@ -12,6 +12,8 @@ import {
   ChangeContextError,
   describeRegions,
   loadDynamicRegions,
+  MAX_CHANGE_DESCRIPTION_LENGTH,
+  normalizeChangeDescription,
   parseDynamicRegions,
   regionMatches,
   regionsFor,
@@ -198,5 +200,26 @@ describe("loadDynamicRegions (P019)", () => {
   it("the example regions file in the repo is valid", async () => {
     const regions = await loadDynamicRegions("pixelguard.regions.example.json", { required: true });
     expect(regions.length).toBeGreaterThan(0);
+  });
+});
+
+describe("normalizeChangeDescription (P020)", () => {
+  it("returns an empty string for no description", () => {
+    expect(normalizeChangeDescription(undefined)).toBe("");
+    expect(normalizeChangeDescription("   \n  ")).toBe("");
+  });
+
+  it("trims, normalises line endings and collapses blank lines", () => {
+    expect(
+      normalizeChangeDescription("  Redesigned checkout  \r\n\r\n\r\n\r\n- new button   \r\n")
+    ).toBe("Redesigned checkout\n\n- new button");
+  });
+
+  it("rejects descriptions that are too long", () => {
+    const long = "x".repeat(MAX_CHANGE_DESCRIPTION_LENGTH + 1);
+    expect(() => normalizeChangeDescription(long)).toThrow(/keep it under 1000/);
+    expect(normalizeChangeDescription("x".repeat(MAX_CHANGE_DESCRIPTION_LENGTH))).toHaveLength(
+      MAX_CHANGE_DESCRIPTION_LENGTH
+    );
   });
 });

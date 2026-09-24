@@ -27,6 +27,8 @@ export interface JsonReportMeta {
   baselineTag?: string;
   currentTag?: string;
   targetUrl?: string;
+  /** What changed in this build (P020). */
+  changeDescription?: string;
   /** Defaults to now. */
   generatedAt?: Date;
 }
@@ -45,6 +47,7 @@ export interface JsonReport {
   baselineTag?: string;
   currentTag?: string;
   targetUrl?: string;
+  changeDescription?: string;
   summary: JsonReportSummary;
   results: DiffResult[];
 }
@@ -74,6 +77,7 @@ export function buildJsonReport(results: DiffResult[], meta: JsonReportMeta = {}
     ...(meta.baselineTag !== undefined && { baselineTag: meta.baselineTag }),
     ...(meta.currentTag !== undefined && { currentTag: meta.currentTag }),
     ...(meta.targetUrl !== undefined && { targetUrl: meta.targetUrl }),
+    ...(meta.changeDescription && { changeDescription: meta.changeDescription }),
     summary: summarizeDiffs(results),
     results,
   };
