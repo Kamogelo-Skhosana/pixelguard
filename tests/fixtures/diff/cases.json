@@ -1,0 +1,102 @@
+[
+  {
+    "name": "identical",
+    "description": "Same page twice: nothing should be flagged.",
+    "expected": {
+      "changed": false,
+      "sizeChanged": false,
+      "pixelDiffCount": 0,
+      "percentChanged": 0
+    }
+  },
+  {
+    "name": "button-colour",
+    "description": "Button changes from blue to green (60x20 = 1200 of 24000 pixels).",
+    "expected": {
+      "changed": true,
+      "sizeChanged": false,
+      "pixelDiffCount": 1200,
+      "percentChanged": 5
+    }
+  },
+  {
+    "name": "element-shift",
+    "description": "Button moves 5px right: a 5px strip uncovered on the left, 5px added on the right.",
+    "expected": {
+      "changed": true,
+      "sizeChanged": false,
+      "pixelDiffCount": 200,
+      "percentChanged": 0.8333
+    }
+  },
+  {
+    "name": "page-taller",
+    "description": "Page grows by 30px at the bottom: the extra 30x200 area counts as changed.",
+    "expected": {
+      "changed": true,
+      "sizeChanged": true,
+      "pixelDiffCount": 6000,
+      "percentChanged": 20
+    }
+  },
+  {
+    "name": "antialiased-edge",
+    "description": "Only the anti-aliased edge pixels differ: ignored by default.",
+    "expected": {
+      "changed": false,
+      "sizeChanged": false,
+      "pixelDiffCount": 0,
+      "percentChanged": 0
+    }
+  },
+  {
+    "name": "antialiased-edge",
+    "description": "Same pair with includeAntiAliasing: the 20 edge pixels are counted.",
+    "options": {
+      "includeAntiAliasing": true
+    },
+    "expected": {
+      "changed": true,
+      "sizeChanged": false,
+      "pixelDiffCount": 20,
+      "percentChanged": 5
+    }
+  },
+  {
+    "name": "subtle-shade",
+    "description": "Whole page 2 shades darker: below the default threshold, so ignored.",
+    "expected": {
+      "changed": false,
+      "sizeChanged": false,
+      "pixelDiffCount": 0,
+      "percentChanged": 0
+    }
+  },
+  {
+    "name": "subtle-shade",
+    "description": "Same pair with threshold 0: every pixel counts.",
+    "options": {
+      "threshold": 0
+    },
+    "expected": {
+      "changed": true,
+      "sizeChanged": false,
+      "pixelDiffCount": 2500,
+      "percentChanged": 100
+    }
+  },
+  {
+    "name": "real-heading-change",
+    "description": "Real Chromium screenshots where only the <h1> text changes.",
+    "expected": {
+      "changed": true,
+      "sizeChanged": false
+    },
+    "changedRegion": {
+      "x": 24,
+      "y": 24,
+      "width": 376,
+      "height": 33
+    }
+  }
+]

@@ -31,7 +31,7 @@ Suggested labels: `phase-1`, `phase-2`, `phase-3`, plus an epic label per group 
 
 - [x] **P012** — Integrate `pixelmatch` for pixel-level image diffing
 - [x] **P013** — Implement `DiffResult` model (pixel diff count, percent changed, diff image path)
-- [ ] **P014** — Add unit tests for the diff engine using sample image pairs
+- [x] **P014** — Add unit tests for the diff engine using sample image pairs
 
 ### Epic: CLI & Raw Report Output
 

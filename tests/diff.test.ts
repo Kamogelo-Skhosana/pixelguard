@@ -4,14 +4,17 @@
  * Tickets: P012-P014
  */
 
+import { readFileSync } from "node:fs";
 import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { diffImages } from "../src/diff/differ.js";
-import { savePng } from "../src/diff/imageCompare.js";
+import { loadPng, savePng } from "../src/diff/imageCompare.js";
 import { calculatePercentChanged, MIN_REPORTED_PERCENT } from "../src/diff/models.js";
+import type { FixtureCase } from "../scripts/generate-diff-fixtures.js";
 
 function solidImage(width: number, height: number, grey: number): PNG {
   const png = new PNG({ width, height });
@@ -132,5 +135,58 @@ describe("diffImages (P013)", () => {
 });
 
 describe("diff engine with sample image pairs (P014)", () => {
-  it.todo("returns correct DiffResults for a set of known sample image pairs");
+  // Pairs live in tests/fixtures/diff/ — regenerate with `npm run fixtures:diff`.
+  const fixtureDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "diff");
+  const cases = JSON.parse(readFileSync(join(fixtureDir, "cases.json"), "utf8")) as FixtureCase[];
+
+  it("has sample pairs to test", () => {
+    expect(cases.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it.each(cases.map((c) => [c.name + (c.options ? ` ${JSON.stringify(c.options)}` : ""), c]))(
+    "%s",
+    async (_label, c) => {
+      const diffPath = join(dir, "fixtures", `${c.name}-${cases.indexOf(c)}.png`);
+      const result = await diffImages(
+        join(fixtureDir, c.name, "baseline.png"),
+        join(fixtureDir, c.name, "current.png"),
+        diffPath,
+        c.name,
+        "fixture",
+        c.options
+      );
+
+      expect(result.changed).toBe(c.expected.changed);
+      expect(result.sizeChanged).toBe(c.expected.sizeChanged);
+      if (c.expected.pixelDiffCount !== undefined) {
+        expect(result.pixelDiffCount).toBe(c.expected.pixelDiffCount);
+      }
+      if (c.expected.percentChanged !== undefined) {
+        expect(result.percentChanged).toBe(c.expected.percentChanged);
+      }
+
+      // The diff image always matches the compared size.
+      const diff = await loadPng(diffPath);
+      expect(diff.width * diff.height).toBe(result.totalPixels);
+
+      if (c.changedRegion) {
+        // Every red (changed) pixel must be inside the region that actually changed.
+        const r = c.changedRegion;
+        let outside = 0;
+        let inside = 0;
+        for (let y = 0; y < diff.height; y++) {
+          for (let x = 0; x < diff.width; x++) {
+            const i = (y * diff.width + x) * 4;
+            const red = diff.data[i] === 255 && diff.data[i + 1] === 0 && diff.data[i + 2] === 0;
+            if (!red) continue;
+            const within = x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height;
+            if (within) inside++;
+            else outside++;
+          }
+        }
+        expect(inside).toBeGreaterThan(0);
+        expect(outside).toBe(0);
+      }
+    }
+  );
 });

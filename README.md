@@ -77,6 +77,9 @@ pixelguard/
 │   ├── cli.ts                 # CLI entry point
 │   └── config.ts               # Configuration loading (.env, target profiles)
 ├── tests/                      # Unit + integration tests, mirrors src/ layout
+│   └── fixtures/diff/          # Sample baseline/current image pairs for diff tests
+├── scripts/
+│   └── generate-diff-fixtures.ts  # Regenerates tests/fixtures/diff (npm run fixtures:diff)
 ├── docs/
 │   ├── ARCHITECTURE.md        # System design, data flow, setup details
 │   ├── ROADMAP.md             # Phase breakdown + tangible deliverables
