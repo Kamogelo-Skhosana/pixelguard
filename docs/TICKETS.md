@@ -57,7 +57,7 @@ Suggested labels: `phase-1`, `phase-2`, `phase-3`, plus an epic label per group 
 
 - [x] **P021** — Design the judgment prompt template: diff image + context in, structured verdict out
 - [x] **P022** — Build vision-capable LLM client wrapper (API key config, retries)
-- [ ] **P023** — Implement the judgment call per diff and parse the structured response
+- [x] **P023** — Implement the judgment call per diff and parse the structured response
 - [x] **P024** — Extend `DiffResult` with verdict, confidence score, and explanation fields
 - [ ] **P025** — Add unit tests using mocked LLM responses (no live API calls in CI)
 

@@ -22,7 +22,9 @@ import {
   type ChangeContext,
   type DynamicRegion,
 } from "./judge/context.js";
-import { formatDiffResults, formatPercent } from "./report/console.js";
+import { judgeDiffs } from "./judge/judge.js";
+import { createLLMClient, type LLMClient } from "./judge/llmClient.js";
+import { describeVerdict, formatDiffResults, formatPercent } from "./report/console.js";
 import { exportJson } from "./report/jsonExport.js";
 
 export const EXIT_OK = 0;
@@ -124,6 +126,13 @@ export interface DiffCommandOptions {
   change?: string;
   /** File containing the change description (alternative to change). */
   changeFile?: string;
+  /** Ask the AI judge for a verdict on every changed screenshot (P023). */
+  judge?: boolean;
+}
+
+export interface DiffCommandDeps {
+  /** Creates the LLM client used by --judge (tests pass a fake). */
+  createLLM?: (settings: Settings) => LLMClient;
 }
 
 /** Reads the change description from --change or --change-file. */
@@ -151,7 +160,8 @@ export async function resolveChangeDescription(options: {
 export async function runDiff(
   settings: Settings,
   options: DiffCommandOptions,
-  io: CommandIO
+  io: CommandIO,
+  deps: DiffCommandDeps = {}
 ): Promise<number> {
   if (options.report) {
     io.err("Note: --report (AI-judged Markdown report) arrives in Phase 2 and is ignored for now.");
@@ -159,6 +169,17 @@ export async function runDiff(
 
   const compare: CompareOptions = {};
   if (options.threshold !== undefined) compare.threshold = options.threshold;
+
+  // Create the judge up front so a missing API key fails before any work.
+  let llm: LLMClient | undefined;
+  if (options.judge) {
+    try {
+      llm = (deps.createLLM ?? createLLMClient)(settings);
+    } catch (err) {
+      io.err(`Can't use --judge: ${(err as Error).message}`);
+      return EXIT_ERROR;
+    }
+  }
 
   try {
     const regions = await loadRegions(settings, io);
@@ -181,7 +202,19 @@ export async function runDiff(
       regions,
     });
 
-    io.out(formatDiffResults(run.results, { colour: io.colour }));
+    let results = run.results;
+    if (llm) {
+      const changedCount = results.filter((r) => r.changed).length;
+      if (changedCount > 0) {
+        io.out(`Judging ${changedCount} changed screenshot(s) with ${llm.model}...`);
+        results = await judgeDiffs(results, context, llm, {
+          onJudged: (r) => io.out(`  ${r.page} / ${r.viewport}: ${describeVerdict(r)}`),
+        });
+        io.out("");
+      }
+    }
+
+    io.out(formatDiffResults(results, { colour: io.colour }));
 
     if (run.skipped.length > 0) {
       io.err("");
@@ -200,7 +233,7 @@ export async function runDiff(
     }
 
     if (options.output) {
-      await exportJson(run.results, options.output, {
+      await exportJson(results, options.output, {
         baselineTag: options.baseline,
         currentTag: options.current,
         targetUrl: run.targetUrl,
@@ -209,7 +242,7 @@ export async function runDiff(
       io.out(`JSON results: ${options.output}`);
     }
 
-    const changed = run.results.filter((r) => r.changed);
+    const changed = results.filter((r) => r.changed);
     if (options.failOnChange && changed.length > 0) {
       const worst = Math.max(...changed.map((r) => r.percentChanged));
       io.err(

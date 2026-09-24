@@ -114,6 +114,51 @@ describe("buildJudgePrompt", () => {
   });
 });
 
+describe("buildJudgePrompt with a cropped view (P023)", () => {
+  const view = {
+    top: 1000,
+    height: 600,
+    fullWidth: 1440,
+    fullHeight: 6000,
+    scale: 0.5,
+    imageWidth: 720,
+    imageHeight: 300,
+  };
+
+  it("describes the crop and scale", () => {
+    const { user } = buildJudgePrompt(diff(), context, view);
+    expect(user).toContain(
+      "Images shown: cropped to the changed part of the page (rows 1000-1600 of 6000), scaled to 50%; each image is 720x300px"
+    );
+  });
+
+  it("describes an uncropped, unscaled view", () => {
+    const full = { ...view, top: 0, height: 6000, scale: 1, imageWidth: 1440, imageHeight: 6000 };
+    expect(buildJudgePrompt(diff(), context, full).user).toContain(
+      "Images shown: the full screenshot at actual size; each image is 1440x6000px"
+    );
+  });
+
+  it("converts region coordinates to the cropped images and drops regions outside", () => {
+    const { user } = buildJudgePrompt(
+      diff({
+        expectedChangeRegions: [
+          { label: "Inside", kind: "ad", rect: { x: 100, y: 1200, width: 200, height: 100 } },
+          { label: "Outside", kind: "ad", rect: { x: 0, y: 100, width: 50, height: 50 } },
+        ],
+        ignoredRegions: [
+          { label: "Straddles top", rect: { x: 0, y: 900, width: 40, height: 200 } },
+        ],
+      }),
+      context,
+      view
+    );
+    expect(user).toContain("- Inside (ad) at x=50, y=100, 100x50px");
+    expect(user).not.toContain("Outside");
+    expect(user).toContain("- Straddles top at x=0, y=0, 20x50px");
+  });
+});
+
 describe("JUDGE_SYSTEM_PROMPT", () => {
   it("explains the three images in order and every verdict", () => {
     const order = ["BASELINE", "CURRENT", "DIFF"].map((w) =>

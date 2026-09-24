@@ -93,6 +93,12 @@ screenshots/
 - **confidence:** integer 1–10
 - **explanation:** 2–3 plain-English sentences
 - **observedChanges:** up to 10 short descriptions of what visibly changed (optional)
+- **Judging (`src/judge/judge.ts`, `imagePrep.ts`):**
+  - Only changed screenshots are sent to the judge; unchanged ones pass through without an API call
+  - Before sending, the three images are cropped (full width) to the rows around the changed pixels plus 250px of context (at least 1000 rows, so the surrounding layout is visible; shorter screenshots are sent whole), and scaled down only if still over 3000px — so tall full-page screenshots stay sharp where it matters and within API limits. The prompt says what part of the page is shown, and region coordinates are converted to match
+  - The reply is parsed leniently (code fences and surrounding text are fine) and validated; an unreadable reply is asked again once
+  - If the call fails or the reply stays unreadable, the result is marked `Uncertain` with a `judgeError`, so one bad screenshot never stops the run
+  - Screenshots are judged 2 at a time; `pixelguard diff --judge` runs this and shows a Verdict column
 - Findings are rolled up per page and per run into a pass/fail/review summary
 
 ### Change context (`src/judge/context.ts`)
@@ -165,6 +171,7 @@ pixelguard diff --baseline <tag> --current <tag> [--output diffs.json] [--thresh
 - `capture` screenshots every page in `TARGET_PAGES` at every viewport into `screenshots/<tag>/`
 - `diff` pairs the two captures using their manifests, writes diff images to `diffs/<baseline>-vs-<current>/<viewport>/<page>.png`, prints a table, and lists anything it couldn't compare (new, removed or failed pages)
 - `--change "<text>"` (or `--change-file notes.txt`, or the `PIXELGUARD_CHANGE` environment variable in CI) describes what changed in this build; it's shown in the output, saved in the JSON report, and given to the AI judge in Phase 2. Max 1000 characters; an explicit `--change-file` wins over `PIXELGUARD_CHANGE`
+- `--judge` asks the AI judge for a verdict on each changed screenshot (needs `LLM_API_KEY`; fails fast with exit code 2 if it's missing)
 - `--output` also writes the results as JSON; `--threshold` sets pixel colour sensitivity (0-1); `--fail-on-change` makes the command fail when anything changed, for CI
 
 Exit codes: `0` success · `1` changes found with `--fail-on-change` · `2` error (bad config or arguments, failed screenshots, missing capture)

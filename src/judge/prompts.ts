@@ -12,6 +12,7 @@
 import { z } from "zod";
 import type { DiffResult, ImageRect, Verdict } from "../diff/models.js";
 import type { ChangeContext } from "./context.js";
+import type { JudgeView } from "./imagePrep.js";
 
 export const VERDICTS = [
   "Real Bug",
@@ -89,8 +90,9 @@ export const JUDGE_USER_TEMPLATE = `Check: {page} page at {viewport} viewport
 
 Screenshot size: {size}
 Pixels changed: {pixelDiffCount} ({percentChanged}% of the compared area)
+Images shown: {view}
 
-Known dynamic regions on this screenshot (coordinates in screenshot pixels, from the top-left):
+Known dynamic regions (coordinates in the images you are shown, from their top-left corner):
 Expected to change (differences here are likely acceptable):
 {expectedRegions}
 Excluded from the comparison (shown light blue in DIFF):
@@ -127,6 +129,33 @@ function describeRect(rect: ImageRect): string {
   return `x=${rect.x}, y=${rect.y}, ${rect.width}x${rect.height}px`;
 }
 
+/**
+ * Converts a full-page rect into the coordinates of the (cropped, scaled)
+ * images the judge sees. Returns null if the rect is outside the crop.
+ */
+export function toViewRect(rect: ImageRect, view?: JudgeView): ImageRect | null {
+  if (!view) return rect;
+  const top = Math.max(rect.y, view.top);
+  const bottom = Math.min(rect.y + rect.height, view.top + view.height);
+  if (bottom <= top) return null;
+  return {
+    x: Math.round(rect.x * view.scale),
+    y: Math.round((top - view.top) * view.scale),
+    width: Math.max(1, Math.round(rect.width * view.scale)),
+    height: Math.max(1, Math.round((bottom - top) * view.scale)),
+  };
+}
+
+function describeView(view?: JudgeView): string {
+  if (!view) return "the full screenshot at actual size";
+  const cropped = view.top > 0 || view.height < view.fullHeight;
+  const part = cropped
+    ? `cropped to the changed part of the page (rows ${view.top}-${view.top + view.height} of ${view.fullHeight})`
+    : "the full screenshot";
+  const size = view.scale < 1 ? `, scaled to ${Math.round(view.scale * 100)}%` : " at actual size";
+  return `${part}${size}; each image is ${view.imageWidth}x${view.imageHeight}px`;
+}
+
 function describeSize(diff: DiffResult): string {
   const { baselineSize: b, currentSize: c } = diff;
   if (!diff.sizeChanged) return `${c.width}x${c.height}px`;
@@ -137,12 +166,26 @@ function formatPercent(percent: number): string {
   return percent === 0 ? "0" : percent < 0.01 ? "<0.01" : percent.toFixed(2);
 }
 
-/** Builds the system and user prompt for judging one diff. */
-export function buildJudgePrompt(diff: DiffResult, context: ChangeContext): JudgePrompt {
-  const expected = (diff.expectedChangeRegions ?? []).map(
-    (r) => `- ${r.label} (${r.kind}) at ${describeRect(r.rect)}`
-  );
-  const ignored = (diff.ignoredRegions ?? []).map((r) => `- ${r.label} at ${describeRect(r.rect)}`);
+/**
+ * Builds the system and user prompt for judging one diff. Pass the view
+ * from prepareJudgeImages() when the images were cropped or scaled, so the
+ * prompt describes them and region coordinates match what the model sees.
+ */
+export function buildJudgePrompt(
+  diff: DiffResult,
+  context: ChangeContext,
+  view?: JudgeView
+): JudgePrompt {
+  const regionLines = <T extends { label: string; rect: ImageRect }>(
+    regions: T[] | undefined,
+    label: (r: T) => string
+  ) =>
+    (regions ?? []).flatMap((r) => {
+      const rect = toViewRect(r.rect, view);
+      return rect ? [`- ${label(r)} at ${describeRect(rect)}`] : [];
+    });
+  const expected = regionLines(diff.expectedChangeRegions, (r) => `${r.label} (${r.kind})`);
+  const ignored = regionLines(diff.ignoredRegions, (r) => r.label);
 
   const user = renderTemplate(JUDGE_USER_TEMPLATE, {
     page: diff.page,
@@ -150,6 +193,7 @@ export function buildJudgePrompt(diff: DiffResult, context: ChangeContext): Judg
     size: describeSize(diff),
     pixelDiffCount: diff.pixelDiffCount.toLocaleString("en-US"),
     percentChanged: formatPercent(diff.percentChanged),
+    view: describeView(view),
     expectedRegions: expected.length > 0 ? expected.join("\n") : "- none",
     ignoredRegions: ignored.length > 0 ? ignored.join("\n") : "- none",
     changeDescription: context.changeDescription || "(none given)",

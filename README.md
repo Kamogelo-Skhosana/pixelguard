@@ -59,7 +59,7 @@ npm run pixelguard -- capture --tag current
 npm run pixelguard -- diff --baseline baseline --current current --output diffs.json
 ```
 
-Add `--fail-on-change` to make the diff fail (exit code 1) when anything changed — handy in CI. Add `--change "Redesigned the checkout button"` to say what changed in this build (or set `PIXELGUARD_CHANGE`), which helps the AI judge tell intended changes from regressions.
+Add `--fail-on-change` to make the diff fail (exit code 1) when anything changed — handy in CI. Add `--change "Redesigned the checkout button"` to say what changed in this build (or set `PIXELGUARD_CHANGE`), which helps the AI judge tell intended changes from regressions. Add `--judge` (with `LLM_API_KEY` set) to get an AI verdict — Real Bug, Acceptable Change or Uncertain — for each changed screenshot.
 
 Full setup instructions are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

@@ -6,7 +6,7 @@
  *   pixelguard capture --tag <name>
  *   pixelguard diff --baseline <tag> --current <tag> [--output diffs.json]
  *                   [--threshold 0.1] [--fail-on-change]
- *                   [--change "<what changed>" | --change-file notes.txt]
+ *                   [--change "<what changed>" | --change-file notes.txt] [--judge]
  *
  * Exit codes: 0 success, 1 changes found with --fail-on-change, 2 error.
  *
@@ -16,11 +16,18 @@
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
-import { consoleIO, EXIT_ERROR, runCapture, runDiff, type CommandIO } from "./commands.js";
+import {
+  consoleIO,
+  EXIT_ERROR,
+  runCapture,
+  runDiff,
+  type CommandIO,
+  type DiffCommandDeps,
+} from "./commands.js";
 import { ConfigError, loadSettings, type Settings } from "./config.js";
 import { shouldUseColour } from "./report/console.js";
 
-export interface ProgramDeps {
+export interface ProgramDeps extends DiffCommandDeps {
   io?: CommandIO;
   loadSettings?: () => Settings;
   /** Receives the command's exit code (defaults to setting process.exitCode). */
@@ -88,6 +95,10 @@ export function createProgram(deps: ProgramDeps = {}): Command {
       ).env("PIXELGUARD_CHANGE")
     )
     .option("--change-file <path>", "Read the change description from a file")
+    .option(
+      "--judge",
+      "Ask the AI judge for a verdict on each changed screenshot (needs LLM_API_KEY)"
+    )
     .option("--report <path>", "Write the AI-judged Markdown report (Phase 2)")
     .action(
       (
@@ -100,6 +111,7 @@ export function createProgram(deps: ProgramDeps = {}): Command {
           report?: string;
           change?: string;
           changeFile?: string;
+          judge?: boolean;
         },
         cmd: Command
       ) => {
@@ -107,7 +119,7 @@ export function createProgram(deps: ProgramDeps = {}): Command {
         if (opts.changeFile !== undefined && cmd.getOptionValueSource("change") === "env") {
           opts = { ...opts, change: undefined };
         }
-        return withSettings((s) => runDiff(s, opts, io));
+        return withSettings((s) => runDiff(s, opts, io, { createLLM: deps.createLLM }));
       }
     );
 

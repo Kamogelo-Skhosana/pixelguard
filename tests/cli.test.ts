@@ -16,6 +16,7 @@ import { createProgram, exitCodeForError } from "../src/cli.js";
 import { EXIT_CHANGES, EXIT_ERROR, EXIT_OK, type CommandIO } from "../src/commands.js";
 import { ConfigError, DEFAULT_VIEWPORTS, type Settings } from "../src/config.js";
 import { readJsonReport } from "../src/report/jsonExport.js";
+import type { LLMClient } from "../src/judge/llmClient.js";
 
 let server: Server;
 let root: string;
@@ -58,7 +59,11 @@ afterAll(async () => {
 });
 
 /** Runs the CLI with captured output and returns { code, out, err }. */
-async function run(args: string[], overrides: Partial<Settings> | Error = {}) {
+async function run(
+  args: string[],
+  overrides: Partial<Settings> | Error = {},
+  createLLM?: () => LLMClient
+) {
   const out: string[] = [];
   const err: string[] = [];
   const io: CommandIO = { out: (l) => out.push(l), err: (l) => err.push(l), colour: false };
@@ -72,6 +77,7 @@ async function run(args: string[], overrides: Partial<Settings> | Error = {}) {
     setExitCode: (c) => {
       code = c;
     },
+    ...(createLLM && { createLLM }),
   });
   await program.parseAsync(["node", "pixelguard", ...args]);
   return { code, out: out.join("\n"), err: err.join("\n") };
@@ -321,6 +327,51 @@ describe("pixelguard CLI (P015)", () => {
       const long = await run([...diffArgs, "--change", "x".repeat(1001)]);
       expect(long.code).toBe(EXIT_ERROR);
       expect(long.err).toContain("keep it under 1000");
+    });
+  });
+
+  describe("--judge (P023)", () => {
+    const diffArgs = ["diff", "--baseline", "baseline", "--current", "current"];
+    const fakeLLM = (reply: string) => ({
+      model: "fake-model",
+      judge: async () => ({
+        text: reply,
+        model: "fake-model",
+        usage: { inputTokens: 0, outputTokens: 0 },
+      }),
+    });
+
+    it("judges each changed screenshot and shows the verdicts", async () => {
+      const json = join(root, "judged.json");
+      const r = await run([...diffArgs, "--judge", "--output", json], {}, () =>
+        fakeLLM(
+          '{"verdict":"Acceptable Change","confidence":9,"explanation":"Heading text updated."}'
+        )
+      );
+      expect(r.code).toBe(EXIT_OK);
+      expect(r.out).toContain("Judging 2 changed screenshot(s) with fake-model...");
+      expect(r.out).toContain("home / desktop: Acceptable Change (9/10)");
+      expect(r.out).toMatch(/home\s+desktop.*CHANGED\s+Acceptable Change \(9\/10\)/);
+      const report = await readJsonReport(json);
+      expect(report.results.filter((x) => x.verdict === "Acceptable Change")).toHaveLength(2);
+      expect(report.results.find((x) => !x.changed)?.verdict).toBeUndefined();
+    });
+
+    it("exits 2 before doing any work when there's no API key", async () => {
+      const r = await run([...diffArgs, "--judge"], { llmApiKey: "" });
+      expect(r.code).toBe(EXIT_ERROR);
+      expect(r.err).toContain("Can't use --judge: LLM_API_KEY is not set");
+      expect(r.out).not.toContain("Comparing");
+    });
+
+    it("doesn't judge without --judge", async () => {
+      let called = false;
+      const r = await run(diffArgs, {}, () => {
+        called = true;
+        return fakeLLM("{}");
+      });
+      expect(called).toBe(false);
+      expect(r.out).not.toContain("Judging");
     });
   });
 
