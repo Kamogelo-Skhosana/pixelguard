@@ -11,6 +11,12 @@ import { mkdir, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Browser, Page } from "playwright";
 import type { ViewportConfig } from "../config.js";
+import {
+  regionMatches,
+  type DynamicRegion,
+  type RegionRect,
+  type ResolvedRegion,
+} from "../judge/context.js";
 import { buildPageUrl, pageName } from "./pages.js";
 import {
   closePage,
@@ -37,6 +43,11 @@ export interface ScreenshotOptions extends NavigateOptions {
   scrollToLoad?: boolean;
   /** Extra wait after loading/scrolling, in ms, before capturing (default: 250). */
   settleMs?: number;
+  /**
+   * Dynamic regions that apply to this screenshot (already filtered for the
+   * page and viewport). Selector regions are measured just before capturing.
+   */
+  regions?: DynamicRegion[];
 }
 
 export interface ScreenshotResult {
@@ -45,6 +56,8 @@ export interface ScreenshotResult {
   /** Size of the captured image in pixels (the full page, not just the viewport). */
   width: number;
   height: number;
+  /** The regions passed in options.regions, with their boxes measured. */
+  regions: ResolvedRegion[];
 }
 
 /** CSS injected before capturing: hides scrollbars, the text caret, and stops animations. */
@@ -64,6 +77,50 @@ const STABILIZE_CSS = `
  * Scrolls down the page one viewport at a time (capped so infinite-scroll
  * pages can't loop forever), then back to the top.
  */
+/**
+ * Resolves regions to pixel boxes on the page: each element matching a
+ * selector becomes one box (in full-page coordinates, skipping invisible
+ * zero-size elements); rect regions pass through unchanged.
+ */
+export async function measureRegions(
+  page: Page,
+  regions: DynamicRegion[]
+): Promise<ResolvedRegion[]> {
+  const resolved: ResolvedRegion[] = [];
+  for (const region of regions) {
+    const base = { label: region.label, kind: region.kind, handling: region.handling };
+    if (region.rect) {
+      resolved.push({ ...base, rects: [region.rect] });
+      continue;
+    }
+    const selector = region.selector as string;
+    let rects: RegionRect[];
+    try {
+      rects = await page.evaluate((sel) => {
+        return Array.from(document.querySelectorAll(sel))
+          .map((el) => el.getBoundingClientRect())
+          .filter((r) => r.width > 0 && r.height > 0)
+          .map((r) => {
+            const x = Math.max(0, Math.floor(r.left + window.scrollX));
+            const y = Math.max(0, Math.floor(r.top + window.scrollY));
+            return {
+              x,
+              y,
+              width: Math.ceil(r.right + window.scrollX) - x,
+              height: Math.ceil(r.bottom + window.scrollY) - y,
+            };
+          });
+      }, selector);
+    } catch (err) {
+      throw new Error(
+        `Invalid selector "${selector}" for region "${region.label}": ${(err as Error).message.split("\n")[0]}`
+      );
+    }
+    resolved.push({ ...base, selector, rects });
+  }
+  return resolved;
+}
+
 async function scrollThroughPage(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const step = window.innerHeight;
@@ -88,7 +145,7 @@ export async function captureScreenshot(
   outputPath: string,
   options: ScreenshotOptions = {}
 ): Promise<ScreenshotResult> {
-  const { scrollToLoad = true, settleMs = 250, ...navigateOptions } = options;
+  const { scrollToLoad = true, settleMs = 250, regions = [], ...navigateOptions } = options;
 
   await navigateTo(page, url, navigateOptions);
   await page.addStyleTag({ content: STABILIZE_CSS });
@@ -101,6 +158,8 @@ export async function captureScreenshot(
   // Make sure web fonts are ready so text renders the same every run.
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
   if (settleMs > 0) await page.waitForTimeout(settleMs);
+
+  const measured = await measureRegions(page, regions);
 
   await mkdir(dirname(outputPath), { recursive: true });
   await page.screenshot({
@@ -116,7 +175,7 @@ export async function captureScreenshot(
     height: Math.max(document.documentElement.scrollHeight, window.innerHeight),
   }));
 
-  return { url, path: outputPath, ...size };
+  return { url, path: outputPath, ...size, regions: measured };
 }
 
 /**
@@ -154,7 +213,8 @@ export async function captureViewports(
   url: string,
   viewports: ViewportConfig[],
   outputPathFor: (viewport: ViewportConfig) => string,
-  options: ScreenshotOptions = {}
+  options: ScreenshotOptions = {},
+  regionsFor?: (viewport: ViewportConfig) => DynamicRegion[]
 ): Promise<ViewportCaptureOutcome[]> {
   const outcomes: ViewportCaptureOutcome[] = [];
   for (const viewport of viewports) {
@@ -164,7 +224,7 @@ export async function captureViewports(
         url,
         { width: viewport.width, height: viewport.height },
         outputPathFor(viewport),
-        options
+        regionsFor ? { ...options, regions: regionsFor(viewport) } : options
       );
       outcomes.push({ viewport: viewport.name, ok: true, result });
     } catch (err) {
@@ -205,6 +265,9 @@ export async function capturePages(
   options: ScreenshotOptions = {},
   onPage?: (result: PageCaptureResult) => void
 ): Promise<PageCaptureResult[]> {
+  // Here options.regions is the full list; each screenshot gets only the
+  // regions matching its page and viewport.
+  const { regions: allRegions = [], ...screenshotOptions } = options;
   const named = pages.map((page) => ({ page, name: pageName(page) }));
 
   const seen = new Map<string, string>();
@@ -227,7 +290,8 @@ export async function capturePages(
       url,
       viewports,
       (viewport) => outputPathFor(entry, viewport),
-      options
+      screenshotOptions,
+      (viewport) => allRegions.filter((r) => regionMatches(r, entry.name, viewport.name))
     );
     const pageResult = { ...entry, url, viewports: outcomes };
     results.push(pageResult);
@@ -248,6 +312,8 @@ export interface CaptureRunOptions {
   screenshot?: ScreenshotOptions;
   /** Called after each page finishes (all its viewports), e.g. to print progress. */
   onPage?: (result: PageCaptureResult) => void;
+  /** Known dynamic regions (all pages); measured and recorded in the manifest. */
+  regions?: DynamicRegion[];
 }
 
 export interface CaptureRunResult {
@@ -284,7 +350,7 @@ export async function captureAllPages(options: CaptureRunOptions): Promise<Captu
           pages,
           viewports,
           (page, viewport) => join(tempDir, viewport.name, `${page.name}.png`),
-          options.screenshot,
+          { ...options.screenshot, regions: options.regions },
           options.onPage
         ),
       options.launch
@@ -307,6 +373,7 @@ export async function captureAllPages(options: CaptureRunOptions): Promise<Captu
                 file: `${v.viewport}/${r.name}.png`,
                 width: v.result.width,
                 height: v.result.height,
+                ...(v.result.regions.length > 0 && { regions: v.result.regions }),
               }
             : { viewport: v.viewport, ok: false, error: v.error.message }
         ),

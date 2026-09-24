@@ -7,7 +7,7 @@
 
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CommanderError } from "commander";
@@ -43,6 +43,8 @@ beforeAll(async () => {
     viewports: DEFAULT_VIEWPORTS.filter((v) => v.name !== "tablet"),
     outputDir: join(root, "screenshots"),
     diffDir: join(root, "diffs"),
+    regionsFile: join(root, "no-regions.json"),
+    regionsFileRequired: false,
     llmApiKey: "",
     llmModel: "test",
     databaseUrl: "sqlite::memory:",
@@ -204,6 +206,48 @@ describe("pixelguard CLI (P015)", () => {
     stderr.mockRestore();
     expect(err).toBeInstanceOf(CommanderError);
     expect(exitCodeForError(err)).toBe(EXIT_ERROR);
+  });
+
+  it("ignores a known dynamic region from the regions file end to end (P019)", async () => {
+    const regionsFile = join(root, "pixelguard.regions.json");
+    await writeFile(
+      regionsFile,
+      JSON.stringify({
+        regions: [
+          { page: "/", label: "Greeting", kind: "other", selector: "h1", handling: "ignore" },
+        ],
+      })
+    );
+    const withRegions = { regionsFile, regionsFileRequired: true };
+
+    heading = "Hello";
+    const base = await run(["capture", "--tag", "r1"], withRegions);
+    expect(base.out).toContain("Using 1 known dynamic region(s)");
+    heading = "Hello again, and welcome";
+    await run(["capture", "--tag", "r2"], withRegions);
+
+    const r = await run(
+      ["diff", "--baseline", "r1", "--current", "r2", "--fail-on-change"],
+      withRegions
+    );
+    expect(r.code).toBe(EXIT_OK);
+    expect(r.out).toContain("0 of 4 screenshots changed.");
+    expect(r.out).toMatch(/home\s+desktop\s+0%\s+0\s+unchanged\s+ignored: Greeting/);
+  });
+
+  it("exits 2 when a required regions file is missing or invalid", async () => {
+    const missing = await run(["capture", "--tag", "x"], {
+      regionsFile: join(root, "nope.json"),
+      regionsFileRequired: true,
+    });
+    expect(missing.code).toBe(EXIT_ERROR);
+    expect(missing.err).toContain("could not read the file");
+
+    const badFile = join(root, "bad-regions.json");
+    await writeFile(badFile, JSON.stringify({ regions: [{ page: "/" }] }));
+    const bad = await run(["diff", "--baseline", "a", "--current", "b"], { regionsFile: badFile });
+    expect(bad.code).toBe(EXIT_ERROR);
+    expect(bad.err).toContain("regions[0].label");
   });
 
   it("treats --help as success", () => {

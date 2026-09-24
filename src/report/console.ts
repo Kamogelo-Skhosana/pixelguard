@@ -14,6 +14,7 @@
  */
 
 import type { DiffResult } from "../diff/models.js";
+import { summarizeDiffs } from "./jsonExport.js";
 
 export interface ConsoleFormatOptions {
   /** Use ANSI colours. Defaults to true when stdout is a terminal and NO_COLOR isn't set. */
@@ -59,6 +60,16 @@ export function describeSizeChange(result: DiffResult): string {
   return parts.join(", ");
 }
 
+/** Notes column: size changes and any ignored regions. */
+export function describeNotes(result: DiffResult): string {
+  const notes: string[] = [];
+  const size = describeSizeChange(result);
+  if (size) notes.push(size);
+  const ignored = [...new Set((result.ignoredRegions ?? []).map((r) => r.label))];
+  if (ignored.length > 0) notes.push(`ignored: ${ignored.join(", ")}`);
+  return notes.join("; ");
+}
+
 interface Cell {
   text: string;
   style?: Style;
@@ -95,7 +106,7 @@ export function formatDiffResults(
     { text: formatPercent(r.percentChanged), align: "right" },
     { text: formatCount(r.pixelDiffCount), align: "right" },
     r.changed ? { text: "CHANGED", style: "red" } : { text: "unchanged", style: "green" },
-    { text: describeSizeChange(r), style: "yellow" },
+    { text: describeNotes(r), style: "yellow" },
   ]);
 
   // Column widths are measured on plain text, so colour codes don't break alignment.
@@ -119,22 +130,17 @@ export function formatDiffResults(
       .join("  ");
   };
 
-  const changed = results.filter((r) => r.changed);
-  const biggest = changed.reduce<DiffResult | undefined>(
-    (max, r) => (!max || r.percentChanged > max.percentChanged ? r : max),
-    undefined
-  );
-
-  let summary = `${changed.length} of ${results.length} screenshot${results.length === 1 ? "" : "s"} changed.`;
-  if (biggest) {
-    summary += ` Biggest change: ${biggest.page} / ${biggest.viewport} (${formatPercent(biggest.percentChanged)})`;
+  const { total, changed, biggestChange } = summarizeDiffs(results);
+  let summary = `${changed} of ${total} screenshot${total === 1 ? "" : "s"} changed.`;
+  if (biggestChange) {
+    summary += ` Biggest change: ${biggestChange.page} / ${biggestChange.viewport} (${formatPercent(biggestChange.percentChanged)})`;
   }
 
   return [
     renderRow(header, "bold"),
     ...rows.map((row) => renderRow(row)),
     "",
-    paint(summary, changed.length > 0 ? "red" : "green", colour),
+    paint(summary, changed > 0 ? "red" : "green", colour),
   ].join("\n");
 }
 

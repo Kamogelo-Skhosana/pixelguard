@@ -14,6 +14,7 @@
 
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { ResolvedRegion } from "../judge/context.js";
 
 export const MANIFEST_FILE = "manifest.json";
 
@@ -45,7 +46,15 @@ export function screenshotPath(
 }
 
 export type ManifestScreenshot =
-  | { viewport: string; ok: true; file: string; width: number; height: number }
+  | {
+      viewport: string;
+      ok: true;
+      file: string;
+      width: number;
+      height: number;
+      /** Dynamic regions found on this screenshot (P019). */
+      regions?: ResolvedRegion[];
+    }
   | { viewport: string; ok: false; error: string };
 
 export interface ManifestPage {

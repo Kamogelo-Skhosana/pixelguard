@@ -12,6 +12,13 @@ export interface ImageSize {
   height: number;
 }
 
+export interface ImageRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface DiffResult {
   /** Page name, e.g. "home" (see pageName() in capture.ts). */
   page: string;
@@ -38,6 +45,11 @@ export interface DiffResult {
   diffImagePath: string;
   baselineImagePath: string;
   currentImagePath: string;
+
+  /** Known dynamic regions left out of the comparison (handling "ignore"). */
+  ignoredRegions?: { label: string; rect: ImageRect }[];
+  /** Known dynamic regions expected to change (handling "inform"), for the judge. */
+  expectedChangeRegions?: { label: string; kind: string; rect: ImageRect }[];
 
   // Populated later by the judge layer (Phase 2) — see P024
   verdict?: Verdict;

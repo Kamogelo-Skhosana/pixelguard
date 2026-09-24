@@ -1,0 +1,26 @@
+{
+  "regions": [
+    {
+      "page": "/",
+      "label": "Footer year",
+      "kind": "timestamp",
+      "selector": "#copyright",
+      "handling": "ignore"
+    },
+    {
+      "page": "*",
+      "viewport": "mobile",
+      "label": "Cookie banner",
+      "kind": "banner",
+      "rect": { "x": 0, "y": 0, "width": 390, "height": 80 },
+      "handling": "ignore"
+    },
+    {
+      "page": "/",
+      "label": "Hero carousel",
+      "kind": "carousel",
+      "selector": ".hero-slider",
+      "handling": "inform"
+    }
+  ]
+}

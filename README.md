@@ -90,6 +90,7 @@ pixelguard/
 ├── examples/
 │   └── baseline/               # Sample baseline screenshots for testing the diff engine
 ├── .env.example
+├── pixelguard.regions.example.json  # Example known dynamic regions (copy to pixelguard.regions.json)
 ├── .gitignore
 ├── eslint.config.js           # ESLint 9 flat config
 ├── package.json

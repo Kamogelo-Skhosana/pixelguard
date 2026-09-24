@@ -120,6 +120,16 @@ The change context tells pixelguard what's _expected_ to change:
 
 Invalid files are rejected with every problem listed by location (e.g. `regions[1].rect.width: ...`); unknown fields are rejected so typos don't silently do nothing.
 
+**Configuring regions (P019):** put them in `pixelguard.regions.json` in the project folder (copy `pixelguard.regions.example.json`), or point `REGIONS_FILE` at another file. A missing default file just means no regions; a missing file named in `REGIONS_FILE` is an error.
+
+How regions are applied:
+
+1. **Capture** — each selector region matching the page/viewport is measured just before the screenshot (one box per visible matching element, in full-page pixels) and recorded in the tag's `manifest.json`
+2. **Diff** — the regions file decides which regions apply. Rect regions are used as-is; selector regions use the boxes measured in _both_ captures, so an element that moved is covered in both positions
+   - `ignore` regions are painted identically in both images before comparing, so they never count as changed, and are tinted light blue in the diff image. They're listed in the console Notes column and as `ignoredRegions` in the JSON
+   - `inform` regions are kept in the diff and passed along as `expectedChangeRegions` for the judge
+   - a selector region added after the captures were taken can't be applied; `diff` prints a warning to re-capture
+
 ## 4. Report + Dashboard (`src/report/`, `src/dashboard/`)
 
 - Console output (Phase 1) and Markdown report (Phase 2) rendering

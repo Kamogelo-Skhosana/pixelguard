@@ -101,6 +101,47 @@ describe("compareImages", () => {
   });
 });
 
+describe("compareImages with a mask (P019)", () => {
+  const changed = [
+    { x: 2, y: 2, colour: BLACK },
+    { x: 15, y: 8, colour: BLACK },
+  ];
+
+  it("doesn't count changes inside masked areas", () => {
+    const result = compareImages(makeImage(20, 10, WHITE), makeImage(20, 10, WHITE, changed), {
+      mask: [{ x: 0, y: 0, width: 5, height: 5 }],
+    });
+    expect(result.pixelDiffCount).toBe(1); // only the pixel at (15, 8)
+  });
+
+  it("tints masked areas light blue in the diff image", () => {
+    const result = compareImages(makeImage(20, 10, WHITE), makeImage(20, 10, WHITE, changed), {
+      mask: [{ x: 0, y: 0, width: 5, height: 5 }],
+    });
+    expect(pixelAt(result.diff, 2, 2)).toEqual([190, 215, 255, 255]);
+    expect(pixelAt(result.diff, 15, 8)).toEqual([255, 0, 0, 255]);
+  });
+
+  it("clips masks that go past the image edge and skips ones fully outside", () => {
+    const result = compareImages(makeImage(20, 10, WHITE), makeImage(20, 10, WHITE, changed), {
+      mask: [
+        { x: 12, y: 5, width: 100, height: 100 },
+        { x: 500, y: 500, width: 10, height: 10 },
+      ],
+    });
+    expect(result.pixelDiffCount).toBe(1); // (15, 8) is masked, (2, 2) is not
+  });
+
+  it("never modifies the images passed in", () => {
+    const baseline = makeImage(4, 4, WHITE);
+    const before = Buffer.from(baseline.data);
+    compareImages(baseline, makeImage(4, 4, WHITE), {
+      mask: [{ x: 0, y: 0, width: 4, height: 4 }],
+    });
+    expect(Buffer.compare(baseline.data, before)).toBe(0);
+  });
+});
+
 describe("padImage", () => {
   it("returns the same image when no padding is needed", () => {
     const img = makeImage(4, 4, WHITE);

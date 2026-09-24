@@ -14,6 +14,9 @@ import type { Browser } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeBrowser, launchBrowser, NavigationError } from "../src/capture/browser.js";
 import { listTags, readManifest } from "../src/capture/storage.js";
+import { measureRegions } from "../src/capture/capture.js";
+import { newPage, closePage, navigateTo } from "../src/capture/browser.js";
+import { parseDynamicRegions } from "../src/judge/context.js";
 import {
   buildPageUrl,
   captureAllPages,
@@ -54,6 +57,18 @@ const RESPONSIVE_PAGE = `<!doctype html>
   @media (min-width: 1024px) { body { background: rgb(0, 0, 255); } }
 </style></head><body></body></html>`;
 
+const REGIONS_PAGE = `<!doctype html>
+<html><head><style>
+  body { margin: 0; }
+  .ad { width: 300px; height: 50px; margin: 10px; background: #ccc; }
+  #clock { position: absolute; left: 100px; top: 1500px; width: 80px; height: 20px; }
+  .hidden { display: none; }
+</style></head><body>
+  <div class="ad"></div><div class="ad"></div><div class="ad hidden"></div>
+  <div style="height: 2000px"></div>
+  <div id="clock">12:00</div>
+</body></html>`;
+
 let server: Server;
 let baseUrl: string;
 let browser: Browser;
@@ -66,7 +81,10 @@ function pixelAt(png: PNG, x: number, y: number): [number, number, number] {
 
 beforeAll(async () => {
   server = createServer((req, res) => {
-    if (req.url === "/" || req.url === "/about") {
+    if (req.url === "/regions") {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(REGIONS_PAGE);
+    } else if (req.url === "/" || req.url === "/about") {
       res.writeHead(200, { "Content-Type": "text/html" });
       res.end(`<!doctype html><title>${req.url}</title><body>Page ${req.url}</body>`);
     } else if (req.url === "/responsive") {
@@ -101,7 +119,13 @@ describe("captureUrl", () => {
     // 50px spinner + 2 x 1000px blocks + 200px lazy block
     expect(png.width).toBe(800);
     expect(png.height).toBe(2250);
-    expect(result).toEqual({ url: `${baseUrl}/tall`, path, width: 800, height: 2250 });
+    expect(result).toEqual({
+      url: `${baseUrl}/tall`,
+      path,
+      width: 800,
+      height: 2250,
+      regions: [],
+    });
   });
 
   it("scrolls first so lazy content is rendered", async () => {
@@ -362,5 +386,86 @@ describe("captureAllPages", () => {
     await expect(
       captureAllPages({ baseUrl, pages: ["/"], viewports, outputDir: outDir, tag: "../oops" })
     ).rejects.toThrow(/Invalid tag/);
+  });
+});
+
+describe("known dynamic regions at capture time (P019)", () => {
+  const regions = parseDynamicRegions({
+    regions: [
+      { page: "/regions", label: "Ads", kind: "ad", selector: ".ad", handling: "ignore" },
+      { page: "*", label: "Clock", kind: "timestamp", selector: "#clock" },
+      { page: "/regions", label: "Corner", rect: { x: 0, y: 0, width: 5, height: 5 } },
+      { page: "/regions", label: "Gone", selector: ".does-not-exist" },
+      { page: "/other", label: "Other page only", selector: "body" },
+      { page: "*", viewport: "mobile", label: "Mobile only", selector: "body" },
+    ],
+  });
+
+  it("measures each visible matching element in full-page pixels", async () => {
+    const page = await newPage(browser, { width: 800, height: 600 });
+    await navigateTo(page, `${baseUrl}/regions`);
+    await page.evaluate(() => window.scrollTo(0, 1000)); // coordinates must not depend on scroll
+    const measured = await measureRegions(page, regions.slice(0, 4));
+    await closePage(page);
+
+    expect(measured).toEqual([
+      {
+        label: "Ads",
+        kind: "ad",
+        handling: "ignore",
+        selector: ".ad",
+        rects: [
+          { x: 10, y: 10, width: 300, height: 50 },
+          { x: 10, y: 70, width: 300, height: 50 },
+        ],
+      },
+      {
+        label: "Clock",
+        kind: "timestamp",
+        handling: "inform",
+        selector: "#clock",
+        rects: [{ x: 100, y: 1500, width: 80, height: 20 }],
+      },
+      {
+        label: "Corner",
+        kind: "other",
+        handling: "inform",
+        rects: [{ x: 0, y: 0, width: 5, height: 5 }],
+      },
+      { label: "Gone", kind: "other", handling: "inform", selector: ".does-not-exist", rects: [] },
+    ]);
+  });
+
+  it("explains an invalid selector", async () => {
+    const page = await newPage(browser, { width: 800, height: 600 });
+    await navigateTo(page, `${baseUrl}/regions`);
+    const bad = parseDynamicRegions({ regions: [{ page: "*", label: "Bad", selector: "##" }] });
+    await expect(measureRegions(page, bad)).rejects.toThrow(
+      /Invalid selector "##" for region "Bad"/
+    );
+    await closePage(page);
+  });
+
+  it("records only the regions for each page/viewport in the manifest", async () => {
+    const outputDir = join(outDir, "run-regions");
+    await captureAllPages({
+      baseUrl,
+      pages: ["/regions", "/about"],
+      viewports: DEFAULT_VIEWPORTS.filter((v) => v.name !== "tablet"),
+      outputDir,
+      tag: "baseline",
+      regions,
+    });
+    const manifest = await readManifest(outputDir, "baseline");
+    const labels = (page: number, shot: number) => {
+      const s = manifest.pages[page].screenshots[shot];
+      return s.ok ? (s.regions ?? []).map((r) => r.label) : null;
+    };
+    expect(labels(0, 0)).toEqual(["Ads", "Clock", "Corner", "Gone"]); // regions / desktop
+    expect(labels(0, 1)).toEqual(["Ads", "Clock", "Corner", "Gone", "Mobile only"]); // regions / mobile
+    expect(labels(1, 0)).toEqual(["Clock"]); // about / desktop
+    expect(manifest.pages[1].screenshots[0]).toMatchObject({
+      regions: [{ label: "Clock", rects: [] }],
+    });
   });
 });

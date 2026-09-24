@@ -33,6 +33,10 @@ export interface Settings {
   outputDir: string;
   /** Root folder for diff images (diffs/<baseline>-vs-<current>/<viewport>/<page>.png). */
   diffDir: string;
+  /** JSON file listing known dynamic regions (see judge/context.ts). */
+  regionsFile: string;
+  /** True when REGIONS_FILE was set explicitly, so a missing file is an error. */
+  regionsFileRequired: boolean;
   /** Empty until the judge layer is used (Phase 2). */
   llmApiKey: string;
   llmModel: string;
@@ -117,6 +121,7 @@ const EnvSchema = z.object({
   VIEWPORTS: z.string().optional(),
   OUTPUT_DIR: z.string().trim().min(1, "OUTPUT_DIR cannot be empty").default("screenshots"),
   DIFF_DIR: z.string().trim().min(1, "DIFF_DIR cannot be empty").default("diffs"),
+  REGIONS_FILE: z.string().trim().optional(),
   LLM_API_KEY: z.string().default(""),
   LLM_MODEL: z.string().trim().min(1, "LLM_MODEL cannot be empty").default("claude-sonnet-4-6"),
   DATABASE_URL: z
@@ -167,6 +172,8 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     viewports,
     outputDir: data.OUTPUT_DIR,
     diffDir: data.DIFF_DIR,
+    regionsFile: data.REGIONS_FILE ?? "pixelguard.regions.json",
+    regionsFileRequired: data.REGIONS_FILE !== undefined,
     llmApiKey: data.LLM_API_KEY,
     llmModel: data.LLM_MODEL,
     databaseUrl: data.DATABASE_URL,

@@ -30,6 +30,7 @@
  * Tickets: P018, P019, P020
  */
 
+import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { pageName } from "../capture/pages.js";
 
@@ -84,6 +85,20 @@ export const ChangeContextFileSchema = z
 export type DynamicRegion = z.infer<typeof DynamicRegionSchema>;
 export type RegionRect = z.infer<typeof RectSchema>;
 
+/**
+ * A region as actually found on a captured page: selector regions are
+ * measured at capture time (one rect per matching element); rect regions
+ * pass through as-is. Stored in the capture manifest.
+ */
+export interface ResolvedRegion {
+  label: string;
+  kind: DynamicRegion["kind"];
+  handling: DynamicRegion["handling"];
+  selector?: string;
+  /** Boxes in full-page screenshot pixels. Empty if the selector matched nothing visible. */
+  rects: RegionRect[];
+}
+
 export interface ChangeContext {
   dynamicRegions: DynamicRegion[];
   /** What changed in this build, in the developer's words (P020). */
@@ -128,8 +143,36 @@ export function parseDynamicRegions(input: unknown, source?: string): DynamicReg
 }
 
 export function defaultChangeContext(): ChangeContext {
-  // TODO (P019): load known dynamic regions from config.
   return { dynamicRegions: [], changeDescription: "" };
+}
+
+/** Default regions file, looked for in the current folder. */
+export const DEFAULT_REGIONS_FILE = "pixelguard.regions.json";
+
+/**
+ * Loads dynamic regions from a JSON file.
+ * A missing file is fine (no regions) unless required is true — used when
+ * the user explicitly pointed REGIONS_FILE at a file.
+ */
+export async function loadDynamicRegions(
+  path: string,
+  options: { required?: boolean } = {}
+): Promise<DynamicRegion[]> {
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT" && !options.required) return [];
+    throw new ChangeContextError([`could not read the file: ${(err as Error).message}`], path);
+  }
+
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch (err) {
+    throw new ChangeContextError([`not valid JSON: ${(err as Error).message}`], path);
+  }
+  return parseDynamicRegions(data, path);
 }
 
 /** True when region applies to this page (name or path) and viewport. */

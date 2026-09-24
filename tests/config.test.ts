@@ -64,6 +64,8 @@ describe("loadSettings", () => {
       viewports: DEFAULT_VIEWPORTS,
       outputDir: "screenshots",
       diffDir: "diffs",
+      regionsFile: "pixelguard.regions.json",
+      regionsFileRequired: false,
       llmApiKey: "",
       llmModel: "claude-sonnet-4-6",
       databaseUrl: "sqlite:./pixelguard.db",
@@ -78,6 +80,7 @@ describe("loadSettings", () => {
       VIEWPORTS: "wide:1920x1080",
       OUTPUT_DIR: "shots",
       DIFF_DIR: "out/diffs",
+      REGIONS_FILE: "config/regions.json",
       LLM_API_KEY: "key",
       LLM_MODEL: "some-model",
       DATABASE_URL: "sqlite:./runs.db",
@@ -86,6 +89,8 @@ describe("loadSettings", () => {
     expect(s.viewports).toEqual([{ name: "wide", width: 1920, height: 1080 }]);
     expect(s.outputDir).toBe("shots");
     expect(s.diffDir).toBe("out/diffs");
+    expect(s.regionsFile).toBe("config/regions.json");
+    expect(s.regionsFileRequired).toBe(true);
     expect(s.llmApiKey).toBe("key");
     expect(s.llmModel).toBe("some-model");
     expect(s.databasePath).toBe("./runs.db");

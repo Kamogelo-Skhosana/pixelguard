@@ -4,10 +4,14 @@
  * Ticket: P018
  */
 
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   ChangeContextError,
   describeRegions,
+  loadDynamicRegions,
   parseDynamicRegions,
   regionMatches,
   regionsFor,
@@ -148,5 +152,51 @@ describe("describeRegions", () => {
         '- Hero carousel (carousel) at element ".hero": expected to change; differences here are likely acceptable',
       ].join("\n")
     );
+  });
+});
+
+describe("loadDynamicRegions (P019)", () => {
+  it("loads and validates a regions file", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pixelguard-regions-"));
+    try {
+      const path = join(dir, "pixelguard.regions.json");
+      await writeFile(path, JSON.stringify({ regions: [footerYear, carousel] }));
+      const regions = await loadDynamicRegions(path);
+      expect(regions.map((r) => r.label)).toEqual(["Footer year", "Hero carousel"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns no regions when the default file doesn't exist", async () => {
+    expect(await loadDynamicRegions(join(tmpdir(), "no-such-regions.json"))).toEqual([]);
+  });
+
+  it("errors when a required file doesn't exist", async () => {
+    await expect(
+      loadDynamicRegions(join(tmpdir(), "no-such-regions.json"), { required: true })
+    ).rejects.toThrow(/no-such-regions\.json[\s\S]*could not read the file/);
+  });
+
+  it("explains invalid JSON and schema problems, naming the file", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pixelguard-regions-"));
+    try {
+      const bad = join(dir, "bad.json");
+      await writeFile(bad, "{ regions: [ }");
+      await expect(loadDynamicRegions(bad)).rejects.toThrow(/bad\.json[\s\S]*not valid JSON/);
+
+      const wrong = join(dir, "wrong.json");
+      await writeFile(wrong, JSON.stringify({ regions: [{ page: "/", label: "x" }] }));
+      await expect(loadDynamicRegions(wrong)).rejects.toThrow(
+        /wrong\.json[\s\S]*regions\[0\]: needs exactly one/
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("the example regions file in the repo is valid", async () => {
+    const regions = await loadDynamicRegions("pixelguard.regions.example.json", { required: true });
+    expect(regions.length).toBeGreaterThan(0);
   });
 });

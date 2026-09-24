@@ -24,6 +24,19 @@ export interface CompareOptions {
    * font-smoothing differences are ignored).
    */
   includeAntiAliasing?: boolean;
+  /**
+   * Areas to leave out of the comparison (known dynamic regions with
+   * handling "ignore"). They never count as changed, and are tinted blue
+   * in the diff image so it's clear they were skipped.
+   */
+  mask?: MaskRect[];
+}
+
+export interface MaskRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export interface CompareResult {
@@ -45,6 +58,36 @@ export interface CompareResult {
  * Opaque magenta, so it shows up as a difference against almost any real content.
  */
 const PAD_COLOUR = [255, 0, 255, 255] as const;
+
+/** Tint for masked (ignored) areas in the diff image: light blue. */
+const MASK_TINT = [190, 215, 255, 255] as const;
+
+/** Clips a rect to the image, returning null if nothing is left. */
+function clip(rect: MaskRect, width: number, height: number): MaskRect | null {
+  const x = Math.max(0, Math.floor(rect.x));
+  const y = Math.max(0, Math.floor(rect.y));
+  const right = Math.min(width, Math.ceil(rect.x + rect.width));
+  const bottom = Math.min(height, Math.ceil(rect.y + rect.height));
+  return right > x && bottom > y ? { x, y, width: right - x, height: bottom - y } : null;
+}
+
+/** Sets every pixel inside the rects to colour (mutates image). */
+function fillRects(image: PNG, rects: MaskRect[], colour: readonly number[]): void {
+  for (const rect of rects) {
+    for (let row = rect.y; row < rect.y + rect.height; row++) {
+      for (let col = rect.x; col < rect.x + rect.width; col++) {
+        image.data.set(colour, (row * image.width + col) * 4);
+      }
+    }
+  }
+}
+
+/** Returns a copy of image (so masking never modifies the caller's image). */
+function clone(image: PNG): PNG {
+  const copy = new PNG({ width: image.width, height: image.height });
+  image.data.copy(copy.data);
+  return copy;
+}
 
 /** Reads a PNG file, with a clear error if it's missing or not a valid PNG. */
 export async function loadPng(path: string): Promise<PNG> {
@@ -101,8 +144,20 @@ export function compareImages(
 
   const width = Math.max(baseline.width, current.width);
   const height = Math.max(baseline.height, current.height);
-  const a = padImage(baseline, width, height);
-  const b = padImage(current, width, height);
+  let a = padImage(baseline, width, height);
+  let b = padImage(current, width, height);
+
+  const mask = (options.mask ?? [])
+    .map((r) => clip(r, width, height))
+    .filter((r): r is MaskRect => r !== null);
+  if (mask.length > 0) {
+    // Paint masked areas identically in both images so they can't differ.
+    a = a === baseline ? clone(a) : a;
+    b = b === current ? clone(b) : b;
+    fillRects(a, mask, [0, 0, 0, 255]);
+    fillRects(b, mask, [0, 0, 0, 255]);
+  }
+
   const diff = new PNG({ width, height });
 
   const pixelDiffCount = pixelmatch(a.data, b.data, diff.data, width, height, {
@@ -111,6 +166,7 @@ export function compareImages(
     alpha: 0.1,
     diffColor: [255, 0, 0],
   });
+  fillRects(diff, mask, MASK_TINT);
 
   return {
     diff,

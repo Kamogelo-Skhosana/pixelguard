@@ -15,6 +15,7 @@ import { captureAllPages, type PageCaptureResult } from "./capture/capture.js";
 import type { Settings } from "./config.js";
 import type { CompareOptions } from "./diff/imageCompare.js";
 import { diffTags } from "./diff/runDiff.js";
+import { loadDynamicRegions, type DynamicRegion } from "./judge/context.js";
 import { formatDiffResults, formatPercent } from "./report/console.js";
 import { exportJson } from "./report/jsonExport.js";
 
@@ -34,6 +35,17 @@ export const consoleIO = (colour: boolean): CommandIO => ({
   colour,
 });
 
+/** Loads the regions file, printing how many regions were found. */
+async function loadRegions(settings: Settings, io: CommandIO): Promise<DynamicRegion[]> {
+  const regions = await loadDynamicRegions(settings.regionsFile, {
+    required: settings.regionsFileRequired,
+  });
+  if (regions.length > 0) {
+    io.out(`Using ${regions.length} known dynamic region(s) from ${settings.regionsFile}`);
+  }
+  return regions;
+}
+
 export interface CaptureCommandOptions {
   tag: string;
 }
@@ -44,6 +56,15 @@ export async function runCapture(
   io: CommandIO
 ): Promise<number> {
   const { targetBaseUrl, targetPages, viewports, outputDir } = settings;
+
+  let regions: DynamicRegion[];
+  try {
+    regions = await loadRegions(settings, io);
+  } catch (err) {
+    io.err((err as Error).message);
+    return EXIT_ERROR;
+  }
+
   io.out(
     `Capturing ${targetPages.length} page(s) x ${viewports.length} viewport(s) ` +
       `from ${targetBaseUrl} as "${options.tag}"...`
@@ -69,6 +90,7 @@ export async function runCapture(
       outputDir,
       tag: options.tag,
       onPage,
+      regions,
     });
     io.out("");
     io.out(`Saved ${run.succeeded} screenshot(s) to ${run.dir}`);
@@ -107,6 +129,7 @@ export async function runDiff(
   if (options.threshold !== undefined) compare.threshold = options.threshold;
 
   try {
+    const regions = await loadRegions(settings, io);
     io.out(`Comparing "${options.baseline}" with "${options.current}"...`);
     io.out("");
     const run = await diffTags({
@@ -115,6 +138,7 @@ export async function runDiff(
       baselineTag: options.baseline,
       currentTag: options.current,
       compare,
+      regions,
     });
 
     io.out(formatDiffResults(run.results, { colour: io.colour }));
@@ -123,6 +147,11 @@ export async function runDiff(
       io.err("");
       io.err(`Skipped ${run.skipped.length} screenshot(s) that couldn't be compared:`);
       for (const s of run.skipped) io.err(`  - ${s.page} / ${s.viewport}: ${s.reason}`);
+    }
+
+    if (run.warnings.length > 0) {
+      io.err("");
+      for (const w of run.warnings) io.err(`Warning: ${w}`);
     }
 
     if (run.results.length > 0) {

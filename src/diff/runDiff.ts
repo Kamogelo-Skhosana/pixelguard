@@ -5,7 +5,13 @@
  * diffImages() on every page/viewport captured successfully in both.
  * Diff images go to <diffDir>/<baseline>-vs-<current>/<viewport>/<page>.png.
  *
- * Ticket: P015
+ * Known dynamic regions (P019): the regions config decides which regions
+ * apply; rect regions are used as-is, and selector regions use the boxes
+ * measured at capture time (from both manifests, so an element that moved
+ * is covered in both positions). "ignore" regions are masked out of the
+ * diff; "inform" regions are passed along for the judge.
+ *
+ * Tickets: P015, P019
  */
 
 import { rm } from "node:fs/promises";
@@ -14,6 +20,12 @@ import { readManifest, tagDir, validateTag } from "../capture/storage.js";
 import { diffImages } from "./differ.js";
 import type { CompareOptions } from "./imageCompare.js";
 import type { DiffResult } from "./models.js";
+import {
+  regionMatches,
+  type DynamicRegion,
+  type RegionRect,
+  type ResolvedRegion,
+} from "../judge/context.js";
 
 export interface DiffTagsOptions {
   outputDir: string;
@@ -21,6 +33,8 @@ export interface DiffTagsOptions {
   baselineTag: string;
   currentTag: string;
   compare?: CompareOptions;
+  /** Known dynamic regions from the regions file (all pages). */
+  regions?: DynamicRegion[];
   /** Called after each page/viewport is diffed, e.g. to print progress. */
   onResult?: (result: DiffResult) => void;
 }
@@ -38,9 +52,54 @@ export interface DiffTagsResult {
   targetUrl: string;
   results: DiffResult[];
   skipped: SkippedDiff[];
+  /** Problems that didn't stop the diff, e.g. regions that were never measured. */
+  warnings: string[];
 }
 
-type ShotStatus = { ok: true; file: string } | { ok: false; error: string };
+type ShotStatus =
+  { ok: true; file: string; regions: ResolvedRegion[] } | { ok: false; error: string };
+
+type RegionBox = { label: string; kind: string; rect: RegionRect };
+
+/**
+ * Works out the boxes for every configured region that applies to one
+ * page/viewport, split by handling. Returns labels of selector regions
+ * that weren't measured in either capture.
+ */
+function resolveRegions(
+  regions: DynamicRegion[],
+  page: string,
+  viewport: string,
+  measured: ResolvedRegion[]
+): { ignore: RegionBox[]; inform: RegionBox[]; unmeasured: string[] } {
+  const ignore: RegionBox[] = [];
+  const inform: RegionBox[] = [];
+  const unmeasured: string[] = [];
+
+  for (const region of regions) {
+    if (!regionMatches(region, page, viewport)) continue;
+    let rects: RegionRect[];
+    if (region.rect) {
+      rects = [region.rect];
+    } else {
+      const found = measured.filter(
+        (m) => m.selector === region.selector && m.label === region.label
+      );
+      if (found.length === 0) {
+        unmeasured.push(region.label);
+        continue;
+      }
+      // Same box in both captures (element didn't move) -> keep it once.
+      const unique = new Map(
+        found.flatMap((m) => m.rects).map((r) => [`${r.x},${r.y},${r.width},${r.height}`, r])
+      );
+      rects = [...unique.values()];
+    }
+    const boxes = rects.map((rect) => ({ label: region.label, kind: region.kind, rect }));
+    (region.handling === "ignore" ? ignore : inform).push(...boxes);
+  }
+  return { ignore, inform, unmeasured };
+}
 
 export async function diffTags(options: DiffTagsOptions): Promise<DiffTagsResult> {
   const { outputDir, diffDir, compare } = options;
@@ -61,7 +120,12 @@ export async function diffTags(options: DiffTagsOptions): Promise<DiffTagsResult
     for (const page of manifest.pages) {
       const shots = new Map<string, ShotStatus>();
       for (const s of page.screenshots) {
-        shots.set(s.viewport, s.ok ? { ok: true, file: s.file } : { ok: false, error: s.error });
+        shots.set(
+          s.viewport,
+          s.ok
+            ? { ok: true, file: s.file, regions: s.regions ?? [] }
+            : { ok: false, error: s.error }
+        );
       }
       map.set(page.name, shots);
     }
@@ -75,6 +139,7 @@ export async function diffTags(options: DiffTagsOptions): Promise<DiffTagsResult
 
   const results: DiffResult[] = [];
   const skipped: SkippedDiff[] = [];
+  const warnings: string[] = [];
 
   // Walk pages in baseline order, then any pages that only exist in current.
   const pageNames = [...new Set([...baseIndex.keys(), ...currIndex.keys()])];
@@ -98,18 +163,32 @@ export async function diffTags(options: DiffTagsOptions): Promise<DiffTagsResult
         continue;
       }
 
+      const regions = resolveRegions(options.regions ?? [], page, viewport, [
+        ...b.regions,
+        ...c.regions,
+      ]);
+      for (const label of regions.unmeasured) {
+        warnings.push(
+          `Region "${label}" on ${page} / ${viewport} wasn't measured when these captures were taken — re-capture to apply it.`
+        );
+      }
+
       const result = await diffImages(
         join(tagDir(outputDir, baselineTag), b.file),
         join(tagDir(outputDir, currentTag), c.file),
         join(dir, viewport, `${page}.png`),
         page,
         viewport,
-        compare
+        {
+          ...compare,
+          ignoredRegions: regions.ignore.map(({ label, rect }) => ({ label, rect })),
+          expectedChangeRegions: regions.inform,
+        }
       );
       results.push(result);
       options.onResult?.(result);
     }
   }
 
-  return { dir, targetUrl: current.baseUrl, results, skipped };
+  return { dir, targetUrl: current.baseUrl, results, skipped, warnings };
 }
