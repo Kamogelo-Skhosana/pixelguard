@@ -14,6 +14,7 @@
  */
 
 import type { DiffResult } from "../diff/models.js";
+import type { PageStatus, PageVerdict } from "../judge/aggregate.js";
 import { summarizeDiffs } from "./jsonExport.js";
 
 export interface ConsoleFormatOptions {
@@ -166,4 +167,38 @@ export function formatDiffResults(
 
 export function printDiffResults(results: DiffResult[], options: ConsoleFormatOptions = {}): void {
   console.log(formatDiffResults(results, options));
+}
+
+const PAGE_STATUS: Record<PageStatus, { mark: string; label: string; style: Style }> = {
+  fail: { mark: "✗", label: "FAIL", style: "red" },
+  review: { mark: "?", label: "REVIEW", style: "yellow" },
+  pass: { mark: "✓", label: "PASS", style: "green" },
+};
+
+/**
+ * Formats the per-page rollup (P026), worst pages first:
+ *
+ *   Pages:
+ *     ✗ checkout  FAIL    Real Bug on mobile (9/10)
+ *     ? about     REVIEW  Needs review: desktop Uncertain (4/10)
+ *     ✓ home      PASS    Acceptable changes on desktop and mobile
+ */
+export function formatPageVerdicts(
+  pages: PageVerdict[],
+  options: ConsoleFormatOptions = {}
+): string {
+  const colour = options.colour ?? shouldUseColour();
+  if (pages.length === 0) return "Pages: none";
+
+  const order: PageStatus[] = ["fail", "review", "pass"];
+  const sorted = [...pages].sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
+  const nameWidth = Math.max(...pages.map((p) => p.page.length));
+  const labelWidth = Math.max(...pages.map((p) => PAGE_STATUS[p.status].label.length));
+
+  const lines = sorted.map((p) => {
+    const s = PAGE_STATUS[p.status];
+    const label = paint(s.label, s.style, colour) + " ".repeat(labelWidth - s.label.length);
+    return `  ${paint(s.mark, s.style, colour)} ${p.page.padEnd(nameWidth)}  ${label}  ${p.summary}`;
+  });
+  return ["Pages:", ...lines].join("\n");
 }

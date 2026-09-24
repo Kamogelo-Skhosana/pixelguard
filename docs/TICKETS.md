@@ -63,7 +63,7 @@ Suggested labels: `phase-1`, `phase-2`, `phase-3`, plus an epic label per group 
 
 ### Epic: Verdict Aggregation
 
-- [ ] **P026** — Implement per-page verdict rollup (does this page pass or fail overall?)
+- [x] **P026** — Implement per-page verdict rollup (does this page pass or fail overall?)
 - [ ] **P027** — Implement run-level summary (X real bugs, Y acceptable changes, Z uncertain)
 - [ ] **P028** — Add tests covering aggregation edge cases (mixed verdicts on one page, all-uncertain runs)
 

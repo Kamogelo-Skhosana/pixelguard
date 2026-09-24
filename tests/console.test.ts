@@ -10,6 +10,7 @@ import {
   describeSizeChange,
   formatCount,
   formatDiffResults,
+  formatPageVerdicts,
   formatPercent,
   printDiffResults,
 } from "../src/report/console.js";
@@ -162,6 +163,51 @@ describe("verdict column (P024)", () => {
 
   it("has no verdict column before judging", () => {
     expect(formatDiffResults([result()], { colour: false })).not.toContain("Verdict");
+  });
+});
+
+describe("formatPageVerdicts (P026)", () => {
+  const pages = [
+    {
+      page: "home",
+      status: "pass" as const,
+      summary: "Acceptable changes on desktop",
+      viewports: [],
+    },
+    {
+      page: "checkout",
+      status: "fail" as const,
+      summary: "Real Bug on mobile (9/10)",
+      viewports: [],
+    },
+    {
+      page: "about",
+      status: "review" as const,
+      summary: "Needs review: desktop Uncertain (4/10)",
+      viewports: [],
+    },
+  ];
+
+  it("lists pages worst first, aligned", () => {
+    expect(formatPageVerdicts(pages, { colour: false })).toBe(
+      [
+        "Pages:",
+        "  ✗ checkout  FAIL    Real Bug on mobile (9/10)",
+        "  ? about     REVIEW  Needs review: desktop Uncertain (4/10)",
+        "  ✓ home      PASS    Acceptable changes on desktop",
+      ].join("\n")
+    );
+  });
+
+  it("colours statuses without breaking alignment", () => {
+    const coloured = formatPageVerdicts(pages, { colour: true });
+    expect(coloured).toContain("\x1b[31mFAIL");
+    // eslint-disable-next-line no-control-regex
+    expect(coloured.replace(/\x1b\[\d+m/g, "")).toBe(formatPageVerdicts(pages, { colour: false }));
+  });
+
+  it("handles no pages", () => {
+    expect(formatPageVerdicts([], { colour: false })).toBe("Pages: none");
   });
 });
 

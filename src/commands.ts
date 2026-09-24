@@ -24,7 +24,13 @@ import {
 } from "./judge/context.js";
 import { judgeDiffs } from "./judge/judge.js";
 import { createLLMClient, type LLMClient } from "./judge/llmClient.js";
-import { describeVerdict, formatDiffResults, formatPercent } from "./report/console.js";
+import { rollupPages } from "./judge/aggregate.js";
+import {
+  describeVerdict,
+  formatDiffResults,
+  formatPageVerdicts,
+  formatPercent,
+} from "./report/console.js";
 import { exportJson } from "./report/jsonExport.js";
 
 export const EXIT_OK = 0;
@@ -216,6 +222,12 @@ export async function runDiff(
 
     io.out(formatDiffResults(results, { colour: io.colour }));
 
+    // The page rollup is only meaningful once results have verdicts.
+    if (llm) {
+      io.out("");
+      io.out(formatPageVerdicts(rollupPages(results, run.skipped), { colour: io.colour }));
+    }
+
     if (run.skipped.length > 0) {
       io.err("");
       io.err(`Skipped ${run.skipped.length} screenshot(s) that couldn't be compared:`);
@@ -238,6 +250,7 @@ export async function runDiff(
         currentTag: options.current,
         targetUrl: run.targetUrl,
         changeDescription: context.changeDescription,
+        skipped: run.skipped,
       });
       io.out(`JSON results: ${options.output}`);
     }

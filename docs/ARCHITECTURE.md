@@ -100,7 +100,14 @@ screenshots/
   - If the call fails or the reply stays unreadable, the result is marked `Uncertain` with a `judgeError`, so one bad screenshot never stops the run
   - The parser also ignores extra keys a model might add (e.g. `"reasoning"`) instead of rejecting a good verdict
 - Screenshots are judged 2 at a time; `pixelguard diff --judge` runs this and shows a Verdict column
-- Findings are rolled up per page and per run into a pass/fail/review summary
+- **Per-page rollup (`src/judge/aggregate.ts`, P026):** each page gets one status from its viewports, worst first:
+  - **fail** — any viewport has a Real Bug
+  - **review** — no bug, but a human should look: an Uncertain verdict, a judge error, a change that wasn't judged, or a screenshot that couldn't be compared
+  - **pass** — every viewport is unchanged or an Acceptable Change
+
+  `diff --judge` prints a "Pages" section (worst first), and the JSON report has a `pages` list with each page's status, a one-line summary and its viewports
+
+- Findings are also rolled up per run into a summary (P027)
 
 ### Change context (`src/judge/context.ts`)
 

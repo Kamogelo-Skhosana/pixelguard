@@ -11,6 +11,7 @@
  *     "targetUrl": "https://example.com",
  *     "summary": { "total": 6, "changed": 2, "unchanged": 4, "sizeChanged": 1,
  *                  "biggestChange": { "page": "about", "viewport": "desktop", "percentChanged": 20 } },
+ *     "pages": [ { "page": "about", "status": "fail", "summary": "Real Bug on mobile (9/10)", ... } ],
  *     "results": [ ...DiffResult ]
  *   }
  *
@@ -20,6 +21,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { DiffResult } from "../diff/models.js";
+import { rollupPages, type PageVerdict, type SkippedScreenshot } from "../judge/aggregate.js";
 
 export const JSON_REPORT_SCHEMA_VERSION = 1;
 
@@ -29,6 +31,8 @@ export interface JsonReportMeta {
   targetUrl?: string;
   /** What changed in this build (P020). */
   changeDescription?: string;
+  /** Screenshots that couldn't be compared; they count as "review" in the page rollup. */
+  skipped?: SkippedScreenshot[];
   /** Defaults to now. */
   generatedAt?: Date;
 }
@@ -49,6 +53,8 @@ export interface JsonReport {
   targetUrl?: string;
   changeDescription?: string;
   summary: JsonReportSummary;
+  /** One overall status per page: pass / review / fail (P026). */
+  pages: PageVerdict[];
   results: DiffResult[];
 }
 
@@ -79,6 +85,7 @@ export function buildJsonReport(results: DiffResult[], meta: JsonReportMeta = {}
     ...(meta.targetUrl !== undefined && { targetUrl: meta.targetUrl }),
     ...(meta.changeDescription && { changeDescription: meta.changeDescription }),
     summary: summarizeDiffs(results),
+    pages: rollupPages(results, meta.skipped),
     results,
   };
 }

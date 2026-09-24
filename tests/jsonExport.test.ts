@@ -16,6 +16,7 @@ import {
   readJsonReport,
   summarizeDiffs,
 } from "../src/report/jsonExport.js";
+import { rollupPages } from "../src/judge/aggregate.js";
 
 function result(overrides: Partial<DiffResult> = {}): DiffResult {
   return {
@@ -90,6 +91,7 @@ describe("buildJsonReport", () => {
       targetUrl: "https://example.com",
       changeDescription: "New footer",
       summary: summarizeDiffs(results),
+      pages: rollupPages(results),
       results,
     });
   });
@@ -98,9 +100,23 @@ describe("buildJsonReport", () => {
     const report = buildJsonReport([]);
     expect(Object.keys(report).sort()).toEqual([
       "generatedAt",
+      "pages",
       "results",
       "schemaVersion",
       "summary",
+    ]);
+  });
+});
+
+describe("page rollup in the JSON (P026)", () => {
+  it("includes one status per page, counting skipped screenshots", () => {
+    const report = buildJsonReport(results, {
+      skipped: [{ page: "gone", viewport: "desktop", reason: 'not in "current"' }],
+    });
+    expect(report.pages.map((p) => [p.page, p.status])).toEqual([
+      ["home", "review"], // changed but not judged
+      ["about", "review"],
+      ["gone", "review"],
     ]);
   });
 });
