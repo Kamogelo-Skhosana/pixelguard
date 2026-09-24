@@ -10,6 +10,7 @@ This is a personal portfolio project, built ticket-by-ticket across three phases
 4. Add/update tests for the ticket's scope.
 5. Run locally before pushing:
    ```bash
+   npm run format
    npm run lint
    npm run typecheck
    npm test
@@ -19,6 +20,6 @@ This is a personal portfolio project, built ticket-by-ticket across three phases
 
 ## Code Style
 
-- Linted with ESLint, formatted per the shared config
+- Linted with ESLint (`eslint.config.js`) and formatted with Prettier (`.prettierrc.json`) — run `npm run format` before committing
 - TypeScript `strict` mode is on — no implicit `any`
 - Every module has a header comment stating which ticket(s) it belongs to (keeps traceability between code and the ticket list)

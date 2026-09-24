@@ -13,9 +13,7 @@ import { Command } from "commander";
 
 const program = new Command();
 
-program
-  .name("pixelguard")
-  .description("AI-powered visual regression testing agent");
+program.name("pixelguard").description("AI-powered visual regression testing agent");
 
 program
   .command("capture")
@@ -23,7 +21,9 @@ program
   .requiredOption("--tag <name>", "Tag to store this capture under (e.g. baseline, current)")
   .action((opts) => {
     // TODO (P006-P011): wire up capture layer
-    console.log(`[pixelguard] Capturing screenshots under tag "${opts.tag}" ... (not yet implemented — see docs/TICKETS.md)`);
+    console.log(
+      `[pixelguard] Capturing screenshots under tag "${opts.tag}" ... (not yet implemented — see docs/TICKETS.md)`
+    );
   });
 
 program
@@ -36,7 +36,9 @@ program
   .action((opts) => {
     // TODO (P012-P017): wire up diff engine (Phase 1)
     // TODO (P018-P034): wire up AI judgment + report generation (Phase 2)
-    console.log(`[pixelguard] Diffing "${opts.baseline}" vs "${opts.current}" ... (not yet implemented — see docs/TICKETS.md)`);
+    console.log(
+      `[pixelguard] Diffing "${opts.baseline}" vs "${opts.current}" ... (not yet implemented — see docs/TICKETS.md)`
+    );
   });
 
 program.parse();

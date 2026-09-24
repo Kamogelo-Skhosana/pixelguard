@@ -56,7 +56,7 @@ screenshots/
 ## 3. Judge Layer (`src/judge/`, Phase 2)
 
 - Takes each `DiffResult` (plus the baseline/current image pair and any configured "known dynamic regions")
-- Sends **all three images** (baseline, current, and diff) to a vision-capable LLM with a structured prompt — the diff image alone only shows *where* pixels changed, while the baseline/current pair shows *what* changed
+- Sends **all three images** (baseline, current, and diff) to a vision-capable LLM with a structured prompt — the diff image alone only shows _where_ pixels changed, while the baseline/current pair shows _what_ changed
 - LLM returns:
   - **Verdict:** Real Bug / Acceptable Change / Uncertain
   - **Confidence** (1–10)
@@ -77,7 +77,7 @@ screenshots/
 4. Diff layer produces pixel diffs for each page/viewport pair
 5. Judge layer scores each diff (Phase 2)
 6. Report layer renders the verdict report and saves the run to SQLite
-7. *(Phase 3)* Dashboard reads from SQLite and displays run history + trends
+7. _(Phase 3)_ Dashboard reads from SQLite and displays run history + trends
 
 ## Configuration
 

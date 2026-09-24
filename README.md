@@ -1,6 +1,6 @@
 # pixelguard
 
-**AI-powered visual regression testing agent.** pixelguard captures screenshots of your app before and after a change, diffs them pixel-by-pixel, and then uses a vision-capable LLM to judge whether each detected difference is a *real bug* or just an *acceptable change* — solving the classic false-positive problem that makes most visual regression tools painful to use.
+**AI-powered visual regression testing agent.** pixelguard captures screenshots of your app before and after a change, diffs them pixel-by-pixel, and then uses a vision-capable LLM to judge whether each detected difference is a _real bug_ or just an _acceptable change_ — solving the classic false-positive problem that makes most visual regression tools painful to use.
 
 > QA Testing track.
 
@@ -8,7 +8,7 @@
 
 ## Why pixelguard
 
-Traditional visual regression tools flag every pixel difference, no matter how trivial — a date that naturally changed, a slightly different ad banner, anti-aliasing noise. Testers end up drowning in false positives and start ignoring the tool entirely. pixelguard adds a judgment layer on top of the raw diff: it looks at *what* changed and decides whether a human should actually care.
+Traditional visual regression tools flag every pixel difference, no matter how trivial — a date that naturally changed, a slightly different ad banner, anti-aliasing noise. Testers end up drowning in false positives and start ignoring the tool entirely. pixelguard adds a judgment layer on top of the raw diff: it looks at _what_ changed and decides whether a human should actually care.
 
 ## What It Does
 
@@ -22,11 +22,11 @@ Traditional visual regression tools flag every pixel difference, no matter how t
 
 pixelguard is built in three phases, each ending in something tangible and demoable. See [docs/ROADMAP.md](docs/ROADMAP.md) for the full breakdown and [docs/TICKETS.md](docs/TICKETS.md) for the complete ticket list (50 tickets total).
 
-| Phase | Goal | You end this phase with... |
-|---|---|---|
-| **Phase 1 — Core Capture & Diff Engine** | Capture screenshots and diff them | Working CLI: `pixelguard capture` + `pixelguard diff` → raw diff images and a JSON/console report of what changed |
-| **Phase 2 — AI Judgment Layer** | Separate real bugs from noise | The same CLI now outputs a **verdict per page** (Real Bug / Acceptable Change / Uncertain) with plain-English reasoning, in a Markdown report |
-| **Phase 3 — Dashboard & History** | Make it demoable and manage baselines | A deployed web dashboard showing run history, a side-by-side diff viewer, trend charts, and a one-click "accept as new baseline" action |
+| Phase                                    | Goal                                  | You end this phase with...                                                                                                                    |
+| ---------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Phase 1 — Core Capture & Diff Engine** | Capture screenshots and diff them     | Working CLI: `pixelguard capture` + `pixelguard diff` → raw diff images and a JSON/console report of what changed                             |
+| **Phase 2 — AI Judgment Layer**          | Separate real bugs from noise         | The same CLI now outputs a **verdict per page** (Real Bug / Acceptable Change / Uncertain) with plain-English reasoning, in a Markdown report |
+| **Phase 3 — Dashboard & History**        | Make it demoable and manage baselines | A deployed web dashboard showing run history, a side-by-side diff viewer, trend charts, and a one-click "accept as new baseline" action       |
 
 ## Tech Stack
 
