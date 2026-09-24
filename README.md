@@ -2,7 +2,7 @@
 
 **AI-powered visual regression testing agent.** pixelguard captures screenshots of your app before and after a change, diffs them pixel-by-pixel, and then uses a vision-capable LLM to judge whether each detected difference is a *real bug* or just an *acceptable change* — solving the classic false-positive problem that makes most visual regression tools painful to use.
 
-> Personal portfolio project — QA Testing track.
+> QA Testing track.
 
 ---
 
