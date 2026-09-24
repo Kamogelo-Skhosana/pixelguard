@@ -5,7 +5,7 @@
  * directly. Each returns a process exit code:
  *
  *   0 — success
- *   1 — changes were found and --fail-on-change was set (diff only)
+ *   1 — changes were found with --fail-on-change, or a Real Bug with --fail-on-bug (diff only)
  *   2 — something went wrong (bad config, failed screenshots, missing capture, ...)
  *
  * Ticket: P015
@@ -24,12 +24,13 @@ import {
 } from "./judge/context.js";
 import { judgeDiffs } from "./judge/judge.js";
 import { createLLMClient, type LLMClient } from "./judge/llmClient.js";
-import { rollupPages } from "./judge/aggregate.js";
+import { rollupPages, summarizeRun } from "./judge/aggregate.js";
 import {
   describeVerdict,
   formatDiffResults,
   formatPageVerdicts,
   formatPercent,
+  formatRunSummary,
 } from "./report/console.js";
 import { exportJson } from "./report/jsonExport.js";
 
@@ -134,6 +135,8 @@ export interface DiffCommandOptions {
   changeFile?: string;
   /** Ask the AI judge for a verdict on every changed screenshot (P023). */
   judge?: boolean;
+  /** Exit with code 1 if the judge found a Real Bug (needs judge). */
+  failOnBug?: boolean;
 }
 
 export interface DiffCommandDeps {
@@ -175,6 +178,11 @@ export async function runDiff(
 
   const compare: CompareOptions = {};
   if (options.threshold !== undefined) compare.threshold = options.threshold;
+
+  if (options.failOnBug && !options.judge) {
+    io.err("--fail-on-bug needs --judge (bugs are found by the AI judge).");
+    return EXIT_ERROR;
+  }
 
   // Create the judge up front so a missing API key fails before any work.
   let llm: LLMClient | undefined;
@@ -222,10 +230,13 @@ export async function runDiff(
 
     io.out(formatDiffResults(results, { colour: io.colour }));
 
-    // The page rollup is only meaningful once results have verdicts.
+    // The page rollup and run result are only meaningful once results have verdicts.
+    const runSummary = summarizeRun(results, run.skipped);
     if (llm) {
       io.out("");
       io.out(formatPageVerdicts(rollupPages(results, run.skipped), { colour: io.colour }));
+      io.out("");
+      io.out(formatRunSummary(runSummary, { colour: io.colour }));
     }
 
     if (run.skipped.length > 0) {
@@ -253,6 +264,13 @@ export async function runDiff(
         skipped: run.skipped,
       });
       io.out(`JSON results: ${options.output}`);
+    }
+
+    if (options.failOnBug && runSummary.status === "fail") {
+      io.err(
+        `Failing because the judge found ${runSummary.realBugs} real bug(s) on ${runSummary.pages.fail} page(s).`
+      );
+      return EXIT_CHANGES;
     }
 
     const changed = results.filter((r) => r.changed);

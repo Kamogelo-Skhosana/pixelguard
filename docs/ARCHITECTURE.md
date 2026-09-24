@@ -107,7 +107,7 @@ screenshots/
 
   `diff --judge` prints a "Pages" section (worst first), and the JSON report has a `pages` list with each page's status, a one-line summary and its viewports
 
-- Findings are also rolled up per run into a summary (P027)
+- **Run summary (`summarizeRun()`, P027):** the run's status is its worst page, plus counts of real bugs, acceptable changes, uncertain, failed judgements, unjudged changes and uncompared screenshots, and page pass/review/fail totals. `diff --judge` ends with a one-line result, e.g. `✗ FAIL: 2 real bugs on 1 page, 3 acceptable changes (6 pages checked)`, and the JSON report has it under `run`
 
 ### Change context (`src/judge/context.ts`)
 
@@ -179,10 +179,11 @@ pixelguard diff --baseline <tag> --current <tag> [--output diffs.json] [--thresh
 - `capture` screenshots every page in `TARGET_PAGES` at every viewport into `screenshots/<tag>/`
 - `diff` pairs the two captures using their manifests, writes diff images to `diffs/<baseline>-vs-<current>/<viewport>/<page>.png`, prints a table, and lists anything it couldn't compare (new, removed or failed pages)
 - `--change "<text>"` (or `--change-file notes.txt`, or the `PIXELGUARD_CHANGE` environment variable in CI) describes what changed in this build; it's shown in the output, saved in the JSON report, and given to the AI judge in Phase 2. Max 1000 characters; an explicit `--change-file` wins over `PIXELGUARD_CHANGE`
+- `--fail-on-bug` (with `--judge`) exits with code 1 only when the judge finds a Real Bug — the CI-friendly option once judging is on, since acceptable changes don't fail the build
 - `--judge` asks the AI judge for a verdict on each changed screenshot (needs `LLM_API_KEY`; fails fast with exit code 2 if it's missing)
 - `--output` also writes the results as JSON; `--threshold` sets pixel colour sensitivity (0-1); `--fail-on-change` makes the command fail when anything changed, for CI
 
-Exit codes: `0` success · `1` changes found with `--fail-on-change` · `2` error (bad config or arguments, failed screenshots, missing capture)
+Exit codes: `0` success · `1` changes found with `--fail-on-change`, or a Real Bug with `--fail-on-bug` · `2` error (bad config or arguments, failed screenshots, missing capture)
 
 ## Data Flow (end-to-end)
 

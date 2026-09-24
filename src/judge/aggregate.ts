@@ -1,6 +1,6 @@
 /**
  * Verdict aggregation: rolls per-screenshot results up into one status per
- * page (P026) and, later, a run-level summary (P027).
+ * page (P026) and a run-level summary (P027).
  *
  * Page status, worst first:
  *   fail   — any viewport has a "Real Bug" verdict
@@ -129,4 +129,82 @@ export function rollupPages(
     const status = worst(viewports.map((v) => v.status));
     return { page, status, summary: summarize(status, viewports), viewports };
   });
+}
+
+export interface RunSummary {
+  /** Overall result: the worst page status. */
+  status: PageStatus;
+  /** One line for the console and reports, e.g. "FAIL: 2 real bugs on 1 page, 3 acceptable changes". */
+  headline: string;
+
+  /** Number of pages checked. */
+  totalPages: number;
+  /** Screenshots (page/viewport) judged a Real Bug. */
+  realBugs: number;
+  /** Screenshots judged an Acceptable Change. */
+  acceptableChanges: number;
+  /** Screenshots the judge was Uncertain about (not counting failed judgements). */
+  uncertain: number;
+  /** Changed screenshots the judge couldn't give a verdict for (API error, unreadable reply...). */
+  judgeErrors: number;
+  /** Changed screenshots that weren't sent to the judge. */
+  notJudged: number;
+  /** Screenshots that couldn't be compared (new, removed or failed pages). */
+  skipped: number;
+
+  pages: { pass: number; review: number; fail: number };
+  screenshots: { total: number; changed: number; unchanged: number };
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * Rolls results up into a run-level summary (P027): page statuses plus
+ * how many screenshots got each verdict.
+ */
+export function summarizeRun(results: DiffResult[], skipped: SkippedScreenshot[] = []): RunSummary {
+  const pages = rollupPages(results, skipped);
+  const changed = results.filter((r) => r.changed);
+  const count = (fn: (r: DiffResult) => boolean) => changed.filter(fn).length;
+
+  const summary = {
+    totalPages: pages.length,
+    realBugs: count((r) => !r.judgeError && r.verdict === "Real Bug"),
+    acceptableChanges: count((r) => !r.judgeError && r.verdict === "Acceptable Change"),
+    uncertain: count((r) => !r.judgeError && r.verdict === "Uncertain"),
+    judgeErrors: count((r) => r.judgeError !== undefined),
+    notJudged: count((r) => r.verdict === undefined),
+    skipped: skipped.length,
+    pages: {
+      pass: pages.filter((p) => p.status === "pass").length,
+      review: pages.filter((p) => p.status === "review").length,
+      fail: pages.filter((p) => p.status === "fail").length,
+    },
+    screenshots: {
+      total: results.length,
+      changed: changed.length,
+      unchanged: results.length - changed.length,
+    },
+  };
+  const status = worst(pages.map((p) => p.status));
+  return { status, headline: runHeadline(status, summary), ...summary };
+}
+
+/** Builds the one-line result, mentioning only the counts that aren't zero. */
+function runHeadline(status: PageStatus, s: Omit<RunSummary, "status" | "headline">): string {
+  if (s.totalPages === 0) return "PASS: nothing to compare";
+
+  const parts: string[] = [];
+  if (s.realBugs > 0) {
+    parts.push(`${plural(s.realBugs, "real bug")} on ${plural(s.pages.fail, "page")}`);
+  }
+  if (s.uncertain > 0) parts.push(`${s.uncertain} uncertain`);
+  if (s.judgeErrors > 0) parts.push(`${s.judgeErrors} couldn't be judged`);
+  if (s.notJudged > 0) parts.push(`${s.notJudged} changed but not judged`);
+  if (s.skipped > 0) parts.push(`${s.skipped} not compared`);
+  if (s.acceptableChanges > 0) parts.push(plural(s.acceptableChanges, "acceptable change"));
+  if (parts.length === 0) parts.push("no changes");
+
+  const pagesPart = `${plural(s.totalPages, "page")} checked`;
+  return `${status.toUpperCase()}: ${parts.join(", ")} (${pagesPart})`;
 }

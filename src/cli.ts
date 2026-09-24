@@ -7,8 +7,10 @@
  *   pixelguard diff --baseline <tag> --current <tag> [--output diffs.json]
  *                   [--threshold 0.1] [--fail-on-change]
  *                   [--change "<what changed>" | --change-file notes.txt] [--judge]
+ *                   [--fail-on-bug]
  *
- * Exit codes: 0 success, 1 changes found with --fail-on-change, 2 error.
+ * Exit codes: 0 success, 1 changes found with --fail-on-change or a Real Bug
+ * with --fail-on-bug, 2 error.
  *
  * Ticket: P015
  */
@@ -99,6 +101,10 @@ export function createProgram(deps: ProgramDeps = {}): Command {
       "--judge",
       "Ask the AI judge for a verdict on each changed screenshot (needs LLM_API_KEY)"
     )
+    .option(
+      "--fail-on-bug",
+      "With --judge: exit with code 1 if the judge found a Real Bug (for CI)"
+    )
     .option("--report <path>", "Write the AI-judged Markdown report (Phase 2)")
     .action(
       (
@@ -112,6 +118,7 @@ export function createProgram(deps: ProgramDeps = {}): Command {
           change?: string;
           changeFile?: string;
           judge?: boolean;
+          failOnBug?: boolean;
         },
         cmd: Command
       ) => {

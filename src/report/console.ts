@@ -14,7 +14,7 @@
  */
 
 import type { DiffResult } from "../diff/models.js";
-import type { PageStatus, PageVerdict } from "../judge/aggregate.js";
+import type { PageStatus, PageVerdict, RunSummary } from "../judge/aggregate.js";
 import { summarizeDiffs } from "./jsonExport.js";
 
 export interface ConsoleFormatOptions {
@@ -201,4 +201,11 @@ export function formatPageVerdicts(
     return `  ${paint(s.mark, s.style, colour)} ${p.page.padEnd(nameWidth)}  ${label}  ${p.summary}`;
   });
   return ["Pages:", ...lines].join("\n");
+}
+
+/** The run's one-line result, coloured by status (P027). */
+export function formatRunSummary(summary: RunSummary, options: ConsoleFormatOptions = {}): string {
+  const colour = options.colour ?? shouldUseColour();
+  const s = PAGE_STATUS[summary.status];
+  return `${paint(`${s.mark} ${summary.headline}`, s.style, colour)}`;
 }

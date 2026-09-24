@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { DiffResult } from "../src/diff/models.js";
-import { rollupPages, viewportOutcome } from "../src/judge/aggregate.js";
+import { rollupPages, summarizeRun, viewportOutcome } from "../src/judge/aggregate.js";
 
 function r(page: string, viewport: string, extra: Partial<DiffResult> = {}): DiffResult {
   return {
@@ -154,5 +154,63 @@ describe("rollupPages (P026)", () => {
 
   it("returns nothing for no results", () => {
     expect(rollupPages([])).toEqual([]);
+  });
+});
+
+describe("summarizeRun (P027)", () => {
+  it("counts every verdict across the run", () => {
+    const s = summarizeRun(
+      [
+        r("checkout", "desktop", bug(9)),
+        r("checkout", "mobile", bug(8)),
+        r("home", "desktop", ok()),
+        r("home", "mobile", ok()),
+        r("home", "tablet", ok()),
+        r("about", "desktop", unsure()),
+        r("about", "mobile", judgeFailed),
+        r("blog", "desktop", changed),
+        r("contact", "desktop"),
+      ],
+      [{ page: "new", viewport: "desktop", reason: 'not in "baseline"' }]
+    );
+    expect(s).toEqual({
+      status: "fail",
+      headline:
+        "FAIL: 2 real bugs on 1 page, 1 uncertain, 1 couldn't be judged, 1 changed but not judged, 1 not compared, 3 acceptable changes (6 pages checked)",
+      totalPages: 6,
+      realBugs: 2,
+      acceptableChanges: 3,
+      uncertain: 1,
+      judgeErrors: 1,
+      notJudged: 1,
+      skipped: 1,
+      pages: { pass: 2, review: 3, fail: 1 },
+      screenshots: { total: 9, changed: 8, unchanged: 1 },
+    });
+  });
+
+  it("uses the worst page as the run status", () => {
+    expect(summarizeRun([r("a", "d", ok()), r("b", "d", unsure())]).status).toBe("review");
+    expect(summarizeRun([r("a", "d", ok()), r("b", "d")]).status).toBe("pass");
+  });
+
+  it.each([
+    [[r("a", "d", bug(9))], "FAIL: 1 real bug on 1 page (1 page checked)"],
+    [[r("a", "d", ok()), r("b", "d", ok())], "PASS: 2 acceptable changes (2 pages checked)"],
+    [[r("a", "d"), r("a", "m")], "PASS: no changes (1 page checked)"],
+    [[r("a", "d", unsure())], "REVIEW: 1 uncertain (1 page checked)"],
+    [[], "PASS: nothing to compare"],
+  ])("headline %#", (results, headline) => {
+    expect(summarizeRun(results).headline).toBe(headline);
+  });
+
+  it("counts a failed judgement separately from a real Uncertain", () => {
+    const s = summarizeRun([r("a", "d", judgeFailed)]);
+    expect([s.uncertain, s.judgeErrors]).toEqual([0, 1]);
+  });
+
+  it("is re-exported from judge.ts for convenience", async () => {
+    const judge = await import("../src/judge/judge.js");
+    expect(judge.summarizeRun).toBe(summarizeRun);
   });
 });

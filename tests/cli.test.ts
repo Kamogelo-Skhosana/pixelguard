@@ -358,6 +358,8 @@ describe("pixelguard CLI (P015)", () => {
       expect(r.out).toContain("Pages:");
       expect(r.out).toMatch(/✓ home\s+PASS\s+Acceptable changes on desktop and mobile/);
       expect(r.out).toMatch(/✓ about\s+PASS\s+No changes/);
+      expect(r.out).toContain("✓ PASS: 2 acceptable changes (2 pages checked)");
+      expect(report.run).toMatchObject({ status: "pass", acceptableChanges: 2, realBugs: 0 });
       expect(report.pages.map((p) => [p.page, p.status])).toEqual([
         ["home", "pass"],
         ["about", "pass"],
@@ -376,6 +378,36 @@ describe("pixelguard CLI (P015)", () => {
         fakeLLM('{"verdict":"Real Bug","confidence":9,"explanation":"Heading overlaps the nav."}')
       );
       expect(r.out).toMatch(/✗ home\s+FAIL\s+Real Bug on desktop \(9\/10\) and mobile \(9\/10\)/);
+    });
+
+    it("--fail-on-bug exits 1 when the judge finds a Real Bug", async () => {
+      const r = await run([...diffArgs, "--judge", "--fail-on-bug"], {}, () =>
+        fakeLLM('{"verdict":"Real Bug","confidence":9,"explanation":"Broken."}')
+      );
+      expect(r.code).toBe(EXIT_CHANGES);
+      expect(r.out).toContain("✗ FAIL: 2 real bugs on 1 page (2 pages checked)");
+      expect(r.err).toContain("Failing because the judge found 2 real bug(s) on 1 page(s).");
+    });
+
+    it("--fail-on-bug passes when every change is acceptable, even though pixels changed", async () => {
+      const r = await run([...diffArgs, "--judge", "--fail-on-bug"], {}, () =>
+        fakeLLM('{"verdict":"Acceptable Change","confidence":9,"explanation":"Expected."}')
+      );
+      expect(r.code).toBe(EXIT_OK);
+    });
+
+    it("--fail-on-bug doesn't fail on Uncertain", async () => {
+      const r = await run([...diffArgs, "--judge", "--fail-on-bug"], {}, () =>
+        fakeLLM('{"verdict":"Uncertain","confidence":4,"explanation":"Unclear."}')
+      );
+      expect(r.code).toBe(EXIT_OK);
+      expect(r.out).toContain("? REVIEW: 2 uncertain (2 pages checked)");
+    });
+
+    it("--fail-on-bug without --judge is an error", async () => {
+      const r = await run([...diffArgs, "--fail-on-bug"]);
+      expect(r.code).toBe(EXIT_ERROR);
+      expect(r.err).toContain("--fail-on-bug needs --judge");
     });
 
     it("doesn't judge without --judge", async () => {

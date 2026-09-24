@@ -16,7 +16,7 @@ import {
   readJsonReport,
   summarizeDiffs,
 } from "../src/report/jsonExport.js";
-import { rollupPages } from "../src/judge/aggregate.js";
+import { rollupPages, summarizeRun } from "../src/judge/aggregate.js";
 
 function result(overrides: Partial<DiffResult> = {}): DiffResult {
   return {
@@ -91,6 +91,7 @@ describe("buildJsonReport", () => {
       targetUrl: "https://example.com",
       changeDescription: "New footer",
       summary: summarizeDiffs(results),
+      run: summarizeRun(results),
       pages: rollupPages(results),
       results,
     });
@@ -102,6 +103,7 @@ describe("buildJsonReport", () => {
       "generatedAt",
       "pages",
       "results",
+      "run",
       "schemaVersion",
       "summary",
     ]);

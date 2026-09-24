@@ -204,7 +204,3 @@ describe("judgeDiffs (P023)", () => {
     expect(peak).toBe(3);
   });
 });
-
-describe("summarizeRun", () => {
-  it.todo("correctly counts real bugs, acceptable changes, and uncertain verdicts (P026/P027)");
-});

@@ -21,7 +21,13 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { DiffResult } from "../diff/models.js";
-import { rollupPages, type PageVerdict, type SkippedScreenshot } from "../judge/aggregate.js";
+import {
+  rollupPages,
+  summarizeRun,
+  type PageVerdict,
+  type RunSummary,
+  type SkippedScreenshot,
+} from "../judge/aggregate.js";
 
 export const JSON_REPORT_SCHEMA_VERSION = 1;
 
@@ -53,6 +59,8 @@ export interface JsonReport {
   targetUrl?: string;
   changeDescription?: string;
   summary: JsonReportSummary;
+  /** Run-level result: status, headline and verdict counts (P027). */
+  run: RunSummary;
   /** One overall status per page: pass / review / fail (P026). */
   pages: PageVerdict[];
   results: DiffResult[];
@@ -85,6 +93,7 @@ export function buildJsonReport(results: DiffResult[], meta: JsonReportMeta = {}
     ...(meta.targetUrl !== undefined && { targetUrl: meta.targetUrl }),
     ...(meta.changeDescription && { changeDescription: meta.changeDescription }),
     summary: summarizeDiffs(results),
+    run: summarizeRun(results, meta.skipped),
     pages: rollupPages(results, meta.skipped),
     results,
   };

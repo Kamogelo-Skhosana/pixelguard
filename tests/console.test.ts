@@ -6,12 +6,14 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DiffResult } from "../src/diff/models.js";
+import { summarizeRun } from "../src/judge/aggregate.js";
 import {
   describeSizeChange,
   formatCount,
   formatDiffResults,
   formatPageVerdicts,
   formatPercent,
+  formatRunSummary,
   printDiffResults,
 } from "../src/report/console.js";
 
@@ -208,6 +210,27 @@ describe("formatPageVerdicts (P026)", () => {
 
   it("handles no pages", () => {
     expect(formatPageVerdicts([], { colour: false })).toBe("Pages: none");
+  });
+});
+
+describe("formatRunSummary (P027)", () => {
+  it("prefixes the headline with the status mark and colours it", () => {
+    const summary = summarizeRun([
+      result({
+        changed: true,
+        pixelDiffCount: 5,
+        percentChanged: 1,
+        verdict: "Real Bug",
+        confidence: 9,
+        explanation: "x",
+      }),
+    ]);
+    expect(formatRunSummary(summary, { colour: false })).toBe(
+      "✗ FAIL: 1 real bug on 1 page (1 page checked)"
+    );
+    expect(formatRunSummary(summary, { colour: true })).toBe(
+      "\x1b[31m✗ FAIL: 1 real bug on 1 page (1 page checked)\x1b[0m"
+    );
   });
 });
 

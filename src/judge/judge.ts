@@ -157,14 +157,6 @@ export async function judgeDiffs(
   return results;
 }
 
-export interface RunSummary {
-  totalPages: number;
-  realBugs: number;
-  acceptableChanges: number;
-  uncertain: number;
-}
-
-export function summarizeRun(_diffs: DiffResult[]): RunSummary {
-  // TODO (P026/P027): roll up per-page verdicts into a run-level summary.
-  throw new Error("Not implemented");
-}
+// The run-level summary lives with the page rollup in aggregate.ts (P026/P027);
+// re-exported here for convenience.
+export { summarizeRun, type RunSummary } from "./aggregate.js";
