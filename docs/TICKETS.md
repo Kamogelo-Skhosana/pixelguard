@@ -49,7 +49,7 @@ Suggested labels: `phase-1`, `phase-2`, `phase-3`, plus an epic label per group 
 
 ### Epic: Change Context Configuration
 
-- [ ] **P018** — Design change-context schema: known dynamic regions (timestamps, ads, carousels) to weight/exclude
+- [x] **P018** — Design change-context schema: known dynamic regions (timestamps, ads, carousels) to weight/exclude
 - [ ] **P019** — Add config for marking known-dynamic regions per page
 - [ ] **P020** — Add a CLI option to supply a short description of what changed in this build (helps the LLM's judgment)
 

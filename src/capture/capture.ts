@@ -11,6 +11,7 @@ import { mkdir, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Browser, Page } from "playwright";
 import type { ViewportConfig } from "../config.js";
+import { buildPageUrl, pageName } from "./pages.js";
 import {
   closePage,
   navigateTo,
@@ -24,6 +25,9 @@ import { tagDir, writeManifest, type CaptureManifest, type ManifestScreenshot } 
 // Viewport definitions live in config.ts (P011) so they can be overridden
 // from .env; re-exported here for convenience.
 export { DEFAULT_VIEWPORTS, type ViewportConfig } from "../config.js";
+// Page naming lives in pages.ts (no Playwright dependency) so other layers
+// can use it; re-exported here for convenience.
+export { buildPageUrl, pageName } from "./pages.js";
 
 export interface ScreenshotOptions extends NavigateOptions {
   /**
@@ -172,27 +176,6 @@ export async function captureViewports(
     }
   }
   return outcomes;
-}
-
-/**
- * Turns a page path into a file-safe name used for its screenshots:
- * "/" -> "home", "/about" -> "about", "/blog/Post 1" -> "blog-post-1",
- * "/search?q=shoes" -> "search-q-shoes". Names are lowercase so they
- * behave the same on case-insensitive file systems (Windows, macOS).
- */
-export function pageName(pagePath: string): string {
-  const name = pagePath
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 100)
-    .replace(/-+$/, "");
-  return name || "home";
-}
-
-/** Joins a base URL and a page path with exactly one slash between them. */
-export function buildPageUrl(baseUrl: string, pagePath: string): string {
-  return `${baseUrl.replace(/\/+$/, "")}/${pagePath.replace(/^\/+/, "")}`;
 }
 
 export interface PageCaptureResult {

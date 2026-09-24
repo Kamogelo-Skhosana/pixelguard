@@ -68,13 +68,57 @@ screenshots/
 
 ## 3. Judge Layer (`src/judge/`, Phase 2)
 
-- Takes each `DiffResult` (plus the baseline/current image pair and any configured "known dynamic regions")
+- Takes each `DiffResult` (plus the baseline/current image pair and the **change context**, below)
 - Sends **all three images** (baseline, current, and diff) to a vision-capable LLM with a structured prompt — the diff image alone only shows _where_ pixels changed, while the baseline/current pair shows _what_ changed
 - LLM returns:
   - **Verdict:** Real Bug / Acceptable Change / Uncertain
   - **Confidence** (1–10)
   - **Explanation** in plain English
 - Findings are rolled up per page and per run into a pass/fail/review summary
+
+### Change context (`src/judge/context.ts`)
+
+The change context tells pixelguard what's _expected_ to change:
+
+- **Known dynamic regions** — parts of a page that change on their own. Each region has:
+  - `page` — page path (`/about`) or name (`about`), or `*` for every page
+  - `viewport` — viewport name, or `*` (default) for every viewport
+  - `label` — short name shown in reports and to the judge
+  - `kind` — `timestamp`, `ad`, `carousel`, `animation`, `banner`, `user-content`, `live-data` or `other` (default)
+  - **exactly one of** `selector` (a CSS selector, measured at capture time) or `rect` (`{ x, y, width, height }` in pixels)
+  - `handling` — `ignore` (masked out of the pixel diff) or `inform` (default: kept in the diff, but the judge is told it's expected to change)
+- **Change description** — a short note on what changed in this build (e.g. "Redesigned the checkout button"), supplied from the CLI
+
+```json
+{
+  "regions": [
+    {
+      "page": "/",
+      "label": "Footer year",
+      "kind": "timestamp",
+      "selector": "#copyright",
+      "handling": "ignore"
+    },
+    {
+      "page": "*",
+      "viewport": "mobile",
+      "label": "Cookie banner",
+      "kind": "banner",
+      "rect": { "x": 0, "y": 0, "width": 390, "height": 80 },
+      "handling": "ignore"
+    },
+    {
+      "page": "/",
+      "label": "Hero carousel",
+      "kind": "carousel",
+      "selector": ".hero-slider",
+      "handling": "inform"
+    }
+  ]
+}
+```
+
+Invalid files are rejected with every problem listed by location (e.g. `regions[1].rect.width: ...`); unknown fields are rejected so typos don't silently do nothing.
 
 ## 4. Report + Dashboard (`src/report/`, `src/dashboard/`)
 

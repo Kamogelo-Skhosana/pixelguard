@@ -16,7 +16,8 @@ whether the difference is a real visual bug or an acceptable/expected change.
 Page: {page}
 Viewport: {viewport}
 Percent of pixels changed: {percentChanged}%
-Known dynamic regions on this page: {knownDynamicRegions}
+Known dynamic regions on this page:
+{dynamicRegions}
 What changed in this build (developer note): {changeDescription}
 
 Respond with a JSON object containing:
