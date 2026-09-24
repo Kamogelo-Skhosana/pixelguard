@@ -1,6 +1,6 @@
 # Markdown Report Template
 
-Design for the AI-judged Markdown report written by `pixelguard diff --judge --report report.md` (P029). It is implemented by `generateMarkdownReport()` in `src/report/markdown.ts` (P030); the CLI flag is P031.
+Design for the AI-judged Markdown report written by `pixelguard diff --judge --report report.md` (P029). It is implemented by `generateMarkdownReport()` in `src/report/markdown.ts` (P030) and written by `pixelguard diff --report <path>` (P031).
 
 A complete example that follows this design, rendered from real sample screenshots, is in [`examples/sample-report/report.md`](../examples/sample-report/report.md).
 

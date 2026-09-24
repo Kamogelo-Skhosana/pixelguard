@@ -71,7 +71,7 @@ Suggested labels: `phase-1`, `phase-2`, `phase-3`, plus an epic label per group 
 
 - [x] **P029** — Design the Markdown report template (verdicts, diff image links, explanations)
 - [x] **P030** — Implement the Markdown report generator
-- [ ] **P031** — Add a CLI flag to write the Markdown report to file (`--report report.md`)
+- [x] **P031** — Add a CLI flag to write the Markdown report to file (`--report report.md`)
 
 ### Epic: Persistence
 

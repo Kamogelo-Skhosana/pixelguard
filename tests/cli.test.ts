@@ -7,9 +7,9 @@
 
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { CommanderError } from "commander";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createProgram, exitCodeForError } from "../src/cli.js";
@@ -77,6 +77,7 @@ async function run(
     setExitCode: (c) => {
       code = c;
     },
+    now: () => new Date("2026-09-25T01:00:00.000Z"),
     ...(createLLM && { createLLM }),
   });
   await program.parseAsync(["node", "pixelguard", ...args]);
@@ -180,18 +181,24 @@ describe("pixelguard CLI (P015)", () => {
     expect(r.err).toContain("Run: pixelguard capture --tag nope");
   });
 
-  it("warns that --report isn't available until Phase 2", async () => {
+  it("--report without --judge writes a report of the raw changes (P031)", async () => {
+    const reportPath = join(root, "raw-report", "report.md");
     const r = await run([
       "diff",
       "--baseline",
       "baseline",
       "--current",
-      "same",
+      "current",
       "--report",
-      "r.md",
+      reportPath,
     ]);
-    expect(r.err).toContain("--report");
-    expect(r.err).toContain("Phase 2");
+    expect(r.code).toBe(EXIT_OK);
+    expect(r.out).toContain(`Markdown report: ${reportPath}`);
+    expect(r.out).toContain("run with --judge to add AI verdicts");
+    const md = await readFile(reportPath, "utf8");
+    expect(md).toContain("> ⚠️ **REVIEW:** 2 changed but not judged");
+    expect(md).toContain("| **Judge** | not judged |");
+    expect(md).toContain("#### desktop — Changed (not judged)");
   });
 
   it("prints config errors without a stack trace and exits 2", async () => {
@@ -408,6 +415,72 @@ describe("pixelguard CLI (P015)", () => {
       const r = await run([...diffArgs, "--fail-on-bug"]);
       expect(r.code).toBe(EXIT_ERROR);
       expect(r.err).toContain("--fail-on-bug needs --judge");
+    });
+
+    it("--report writes the AI-judged report (P031)", async () => {
+      const reportPath = join(root, "reports", "visual", "report.md");
+      const json = join(root, "reports", "results.json");
+      const r = await run(
+        [
+          ...diffArgs,
+          "--judge",
+          "--output",
+          json,
+          "--report",
+          reportPath,
+          "--change",
+          "New heading",
+        ],
+        {},
+        () =>
+          fakeLLM(
+            '{"verdict":"Acceptable Change","confidence":9,"explanation":"Heading text updated as described.","observedChanges":["Heading now says Welcome back"]}'
+          )
+      );
+      expect(r.code).toBe(EXIT_OK);
+      expect(r.out).toContain(`Markdown report: ${reportPath}`);
+      expect(r.out).not.toContain("run with --judge");
+
+      const md = await readFile(reportPath, "utf8");
+      expect(md).toContain("> ✅ **PASS:** 2 acceptable changes (2 pages checked)");
+      expect(md).toContain(`| **Target** | ${settings.targetBaseUrl} |`);
+      expect(md).toContain("| **Judge** | fake-model |");
+      expect(md).toContain("| **Generated** | 2026-09-25T01:00:00.000Z |");
+      expect(md).toContain("> New heading");
+      expect(md).toContain("JSON results: `../results.json`");
+
+      // Passing pages are listed compactly, without images (see REPORT_TEMPLATE.md).
+      expect(md).toContain("## Passing pages");
+      expect(md).not.toContain("<img");
+      expect(md).toMatch(/\| home\s*\| Acceptable changes on desktop and mobile \|/);
+    });
+
+    it("--report includes images for pages that need attention, and they resolve", async () => {
+      const reportPath = join(root, "reports", "bugs", "report.md");
+      const r = await run([...diffArgs, "--judge", "--report", reportPath], {}, () =>
+        fakeLLM('{"verdict":"Real Bug","confidence":8,"explanation":"Heading overlaps nav."}')
+      );
+      expect(r.code).toBe(EXIT_OK);
+      const md = await readFile(reportPath, "utf8");
+      expect(md).toContain("## Failing pages");
+      const links = [...md.matchAll(/src="([^"]+)"/g)].map((m) => m[1]);
+      expect(links).toHaveLength(6); // 2 viewports x baseline/current/diff
+      for (const link of links) {
+        await expect(
+          access(resolve(dirname(reportPath), decodeURIComponent(link)))
+        ).resolves.toBeUndefined();
+      }
+    });
+
+    it("--report is still written when --fail-on-bug fails the run", async () => {
+      const reportPath = join(root, "reports", "failing", "report.md");
+      const r = await run(
+        [...diffArgs, "--judge", "--fail-on-bug", "--report", reportPath],
+        {},
+        () => fakeLLM('{"verdict":"Real Bug","confidence":9,"explanation":"Broken."}')
+      );
+      expect(r.code).toBe(EXIT_CHANGES);
+      expect(await readFile(reportPath, "utf8")).toContain("> ❌ **FAIL:**");
     });
 
     it("doesn't judge without --judge", async () => {

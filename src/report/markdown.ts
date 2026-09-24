@@ -5,6 +5,8 @@
  * is shown in examples/sample-report/report.md, which a test regenerates
  * and compares against.
  *
+ * Written by `pixelguard diff --report <path>` (commands.ts, P031).
+ *
  * Tickets: P029, P030, P031
  */
 

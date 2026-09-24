@@ -16,6 +16,7 @@ import type { Settings } from "./config.js";
 import type { CompareOptions } from "./diff/imageCompare.js";
 import { diffTags } from "./diff/runDiff.js";
 import { readFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import {
   loadDynamicRegions,
   normalizeChangeDescription,
@@ -33,6 +34,7 @@ import {
   formatRunSummary,
 } from "./report/console.js";
 import { exportJson } from "./report/jsonExport.js";
+import { generateMarkdownReport, writeReport } from "./report/markdown.js";
 
 export const EXIT_OK = 0;
 export const EXIT_CHANGES = 1;
@@ -125,7 +127,7 @@ export interface DiffCommandOptions {
   current: string;
   /** Write the JSON report here. */
   output?: string;
-  /** Markdown report path (Phase 2 — not available yet). */
+  /** Write the Markdown report here (P031). */
   report?: string;
   threshold?: number;
   failOnChange?: boolean;
@@ -142,6 +144,8 @@ export interface DiffCommandOptions {
 export interface DiffCommandDeps {
   /** Creates the LLM client used by --judge (tests pass a fake). */
   createLLM?: (settings: Settings) => LLMClient;
+  /** Current time, for the report's "Generated" line (tests pass a fixed date). */
+  now?: () => Date;
 }
 
 /** Reads the change description from --change or --change-file. */
@@ -172,10 +176,6 @@ export async function runDiff(
   io: CommandIO,
   deps: DiffCommandDeps = {}
 ): Promise<number> {
-  if (options.report) {
-    io.err("Note: --report (AI-judged Markdown report) arrives in Phase 2 and is ignored for now.");
-  }
-
   const compare: CompareOptions = {};
   if (options.threshold !== undefined) compare.threshold = options.threshold;
 
@@ -264,6 +264,26 @@ export async function runDiff(
         skipped: run.skipped,
       });
       io.out(`JSON results: ${options.output}`);
+    }
+
+    // Written before any --fail-on-* exit: failing runs are when the report matters most.
+    if (options.report) {
+      const report = generateMarkdownReport({
+        results,
+        skipped: run.skipped,
+        targetUrl: run.targetUrl,
+        baselineTag: options.baseline,
+        currentTag: options.current,
+        changeDescription: context.changeDescription,
+        generatedAt: (deps.now ?? (() => new Date()))(),
+        reportDir: dirname(resolve(options.report)),
+        jsonPath: options.output,
+      });
+      await writeReport(report, options.report);
+      io.out(`Markdown report: ${options.report}`);
+      if (!llm) {
+        io.out("  (run with --judge to add AI verdicts and explanations to the report)");
+      }
     }
 
     if (options.failOnBug && runSummary.status === "fail") {
