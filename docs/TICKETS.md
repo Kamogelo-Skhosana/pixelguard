@@ -36,7 +36,7 @@ Suggested labels: `phase-1`, `phase-2`, `phase-3`, plus an epic label per group 
 ### Epic: CLI & Raw Report Output
 
 - [ ] **P015** — Build CLI entry point: `pixelguard capture` and `pixelguard diff` commands
-- [ ] **P016** — Implement console output formatter for diff summaries
+- [x] **P016** — Implement console output formatter for diff summaries
 - [ ] **P017** — Implement JSON export of diff results (`--output diffs.json`)
 
 **Phase 1 checkpoint:** Capture a baseline of a real site, make a small visible change, capture again, and confirm `pixelguard diff` correctly flags the changed pages with a diff image and percentage.
