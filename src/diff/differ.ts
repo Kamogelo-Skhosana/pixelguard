@@ -1,21 +1,38 @@
 /**
  * Pixel-level image diffing using pixelmatch.
  *
+ * Compares a baseline and current screenshot of one page/viewport, writes
+ * a diff image, and returns the result as a DiffResult.
+ *
  * Tickets: P012, P013
  */
 
-import type { DiffResult } from "./models.js";
+import { compareImageFiles, type CompareOptions } from "./imageCompare.js";
+import { calculatePercentChanged, type DiffResult } from "./models.js";
 
 export async function diffImages(
-  _baselinePath: string,
-  _currentPath: string,
-  _outputDiffPath: string,
-  _page: string,
-  _viewport: string
+  baselinePath: string,
+  currentPath: string,
+  outputDiffPath: string,
+  page: string,
+  viewport: string,
+  options: CompareOptions = {}
 ): Promise<DiffResult> {
-  // TODO (P012): load both PNGs (pngjs), run pixelmatch, write the
-  // diff image to outputDiffPath.
-  // TODO (P013): compute percentChanged from pixelDiffCount and
-  // total pixel count, return a populated DiffResult.
-  throw new Error("Not implemented");
+  const result = await compareImageFiles(baselinePath, currentPath, outputDiffPath, options);
+  const totalPixels = result.width * result.height;
+
+  return {
+    page,
+    viewport,
+    pixelDiffCount: result.pixelDiffCount,
+    totalPixels,
+    percentChanged: calculatePercentChanged(result.pixelDiffCount, totalPixels),
+    changed: result.pixelDiffCount > 0,
+    sizeChanged: result.sizeChanged,
+    baselineSize: result.baselineSize,
+    currentSize: result.currentSize,
+    diffImagePath: outputDiffPath,
+    baselineImagePath: baselinePath,
+    currentImagePath: currentPath,
+  };
 }
