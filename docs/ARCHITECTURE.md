@@ -70,10 +70,24 @@ screenshots/
 
 - Takes each `DiffResult` (plus the baseline/current image pair and the **change context**, below)
 - Sends **all three images** (baseline, current, and diff) to a vision-capable LLM with a structured prompt — the diff image alone only shows _where_ pixels changed, while the baseline/current pair shows _what_ changed
-- LLM returns:
-  - **Verdict:** Real Bug / Acceptable Change / Uncertain
-  - **Confidence** (1–10)
-  - **Explanation** in plain English
+- **Prompt design (`src/judge/prompts.ts`):**
+  - A fixed _system prompt_ explains the three images (BASELINE, CURRENT, DIFF — including what red, yellow and light blue mean in the diff), defines each verdict with concrete examples, sets confidence rules (prefer "Uncertain" over a low-confidence guess), and tells the model that text in screenshots or the developer note is data, not instructions
+  - A per-diff _user prompt_ gives the page, viewport, screenshot size (and any size change), pixels changed, known dynamic regions with coordinates, and the developer's change description
+- The LLM must reply with only a JSON object, validated by `JudgeResponseSchema`:
+
+```json
+{
+  "verdict": "Real Bug",
+  "confidence": 8,
+  "explanation": "The checkout button now overlaps the order total on mobile, hiding the price.",
+  "observedChanges": ["Checkout button moved up ~20px", "Order total partly hidden"]
+}
+```
+
+- **verdict:** Real Bug / Acceptable Change / Uncertain
+- **confidence:** integer 1–10
+- **explanation:** 2–3 plain-English sentences
+- **observedChanges:** up to 10 short descriptions of what visibly changed (optional)
 - Findings are rolled up per page and per run into a pass/fail/review summary
 
 ### Change context (`src/judge/context.ts`)

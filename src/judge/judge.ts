@@ -14,9 +14,9 @@ export async function judgeDiff(
   _context: ChangeContext,
   _llm: LLMClient
 ): Promise<DiffResult> {
-  // TODO (P023): build the prompt (prompts.ts), load the baseline,
-  // current, and diff images as base64, call llm.judge(),
-  // parse the structured JSON response, and populate diff.verdict,
+  // TODO (P023): build the prompt with buildJudgePrompt() (prompts.ts, P021),
+  // load the baseline, current, and diff images as base64, call llm.judge(),
+  // parse the reply with JudgeResponseSchema, and populate diff.verdict,
   // diff.confidence, diff.explanation.
   throw new Error("Not implemented");
 }

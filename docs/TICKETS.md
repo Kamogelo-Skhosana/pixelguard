@@ -55,7 +55,7 @@ Suggested labels: `phase-1`, `phase-2`, `phase-3`, plus an epic label per group 
 
 ### Epic: LLM Judgment Integration
 
-- [ ] **P021** — Design the judgment prompt template: diff image + context in, structured verdict out
+- [x] **P021** — Design the judgment prompt template: diff image + context in, structured verdict out
 - [ ] **P022** — Build vision-capable LLM client wrapper (API key config, retries)
 - [ ] **P023** — Implement the judgment call per diff and parse the structured response
 - [ ] **P024** — Extend `DiffResult` with verdict, confidence score, and explanation fields
