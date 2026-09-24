@@ -7,11 +7,19 @@
  * Tickets: P007, P008, P009, P010
  */
 
-import { mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { mkdir, rename, rm } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import type { Browser, Page } from "playwright";
 import type { ViewportConfig } from "../config.js";
-import { closePage, navigateTo, newPage, type NavigateOptions } from "./browser.js";
+import {
+  closePage,
+  navigateTo,
+  newPage,
+  withBrowser,
+  type LaunchOptions,
+  type NavigateOptions,
+} from "./browser.js";
+import { tagDir, writeManifest, type CaptureManifest, type ManifestScreenshot } from "./storage.js";
 
 // Viewport definitions live in config.ts (P011) so they can be overridden
 // from .env; re-exported here for convenience.
@@ -166,14 +174,176 @@ export async function captureViewports(
   return outcomes;
 }
 
-export async function captureAllPages(
-  _baseUrl: string,
-  _pages: string[],
-  _viewports: ViewportConfig[],
-  _tag: string
-): Promise<void> {
-  // TODO (P009): for each page, call captureViewports() with baseUrl + page
-  // and save each viewport's screenshot to
-  // `screenshots/<tag>/<viewport>/<page>.png` (see P010 for the folder convention).
-  throw new Error("Not implemented");
+/**
+ * Turns a page path into a file-safe name used for its screenshots:
+ * "/" -> "home", "/about" -> "about", "/blog/Post 1" -> "blog-post-1",
+ * "/search?q=shoes" -> "search-q-shoes". Names are lowercase so they
+ * behave the same on case-insensitive file systems (Windows, macOS).
+ */
+export function pageName(pagePath: string): string {
+  const name = pagePath
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 100)
+    .replace(/-+$/, "");
+  return name || "home";
+}
+
+/** Joins a base URL and a page path with exactly one slash between them. */
+export function buildPageUrl(baseUrl: string, pagePath: string): string {
+  return `${baseUrl.replace(/\/+$/, "")}/${pagePath.replace(/^\/+/, "")}`;
+}
+
+export interface PageCaptureResult {
+  /** The page path as configured, e.g. "/about". */
+  page: string;
+  /** File-safe name from pageName(), e.g. "about". */
+  name: string;
+  url: string;
+  viewports: ViewportCaptureOutcome[];
+}
+
+/**
+ * Captures every page at every viewport in a single run, reusing one browser.
+ * outputPathFor decides where each page/viewport PNG is saved.
+ *
+ * Throws before capturing anything if two pages would get the same file name
+ * (e.g. "/about-us" and "/about/us"), since their screenshots would overwrite
+ * each other. Failures on individual pages or viewports are recorded in the
+ * results rather than stopping the run.
+ */
+export async function capturePages(
+  browser: Browser,
+  baseUrl: string,
+  pages: string[],
+  viewports: ViewportConfig[],
+  outputPathFor: (page: { page: string; name: string }, viewport: ViewportConfig) => string,
+  options: ScreenshotOptions = {}
+): Promise<PageCaptureResult[]> {
+  const named = pages.map((page) => ({ page, name: pageName(page) }));
+
+  const seen = new Map<string, string>();
+  for (const { page, name } of named) {
+    const other = seen.get(name);
+    if (other !== undefined) {
+      throw new Error(
+        `Pages "${other}" and "${page}" would both be saved as "${name}". ` +
+          `Remove one of them from TARGET_PAGES.`
+      );
+    }
+    seen.set(name, page);
+  }
+
+  const results: PageCaptureResult[] = [];
+  for (const entry of named) {
+    const url = buildPageUrl(baseUrl, entry.page);
+    const outcomes = await captureViewports(
+      browser,
+      url,
+      viewports,
+      (viewport) => outputPathFor(entry, viewport),
+      options
+    );
+    results.push({ ...entry, url, viewports: outcomes });
+  }
+  return results;
+}
+
+export interface CaptureRunOptions {
+  baseUrl: string;
+  pages: string[];
+  viewports: ViewportConfig[];
+  /** Root screenshots folder (Settings.outputDir). */
+  outputDir: string;
+  /** Tag to store this run under, e.g. "baseline" or "current". */
+  tag: string;
+  launch?: LaunchOptions;
+  screenshot?: ScreenshotOptions;
+}
+
+export interface CaptureRunResult {
+  /** Folder the run was saved to: <outputDir>/<tag>. */
+  dir: string;
+  manifest: CaptureManifest;
+  succeeded: number;
+  failed: number;
+}
+
+/**
+ * Captures every page at every viewport and saves the run under
+ * <outputDir>/<tag>/<viewport>/<page>.png, with a manifest.json.
+ *
+ * The run is written to a temporary folder first and only replaces the
+ * existing tag once it finishes, so an interrupted or completely failed run
+ * never wipes out a previous capture (like your baseline). Screenshots from
+ * pages that were removed from the config don't linger either, because the
+ * whole tag folder is replaced.
+ *
+ * Throws if every screenshot failed (the previous capture is kept).
+ */
+export async function captureAllPages(options: CaptureRunOptions): Promise<CaptureRunResult> {
+  const { baseUrl, pages, viewports, outputDir, tag } = options;
+  const finalDir = tagDir(outputDir, tag);
+  const tempDir = join(outputDir, `.tmp-${tag}-${process.pid}-${Date.now()}`);
+
+  try {
+    const results = await withBrowser(
+      (browser) =>
+        capturePages(
+          browser,
+          baseUrl,
+          pages,
+          viewports,
+          (page, viewport) => join(tempDir, viewport.name, `${page.name}.png`),
+          options.screenshot
+        ),
+      options.launch
+    );
+
+    const manifest: CaptureManifest = {
+      tag,
+      capturedAt: new Date().toISOString(),
+      baseUrl,
+      viewports: viewports.map(({ name, width, height }) => ({ name, width, height })),
+      pages: results.map((r) => ({
+        page: r.page,
+        name: r.name,
+        url: r.url,
+        screenshots: r.viewports.map((v): ManifestScreenshot =>
+          v.ok
+            ? {
+                viewport: v.viewport,
+                ok: true,
+                file: `${v.viewport}/${r.name}.png`,
+                width: v.result.width,
+                height: v.result.height,
+              }
+            : { viewport: v.viewport, ok: false, error: v.error.message }
+        ),
+      })),
+    };
+
+    const all = manifest.pages.flatMap((p) => p.screenshots);
+    const succeeded = all.filter((s) => s.ok).length;
+    const failed = all.length - succeeded;
+
+    if (succeeded === 0) {
+      const firstError = all.find((s) => !s.ok);
+      throw new Error(
+        `Every screenshot failed for tag "${tag}"` +
+          (firstError && !firstError.ok ? ` (first error: ${firstError.error})` : "") +
+          `. The previous "${tag}" capture was left unchanged.`
+      );
+    }
+
+    await mkdir(tempDir, { recursive: true });
+    await writeManifest(tempDir, manifest);
+    await rm(finalDir, { recursive: true, force: true });
+    await rename(tempDir, finalDir);
+
+    return { dir: finalDir, manifest, succeeded, failed };
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
 }

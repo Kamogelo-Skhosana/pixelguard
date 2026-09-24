@@ -27,6 +27,9 @@ beforeAll(async () => {
     if (req.url === "/") {
       res.writeHead(200, { "Content-Type": "text/html" });
       res.end("<html><head><title>Home</title></head><body><h1>Hello</h1></body></html>");
+    } else if (req.url === "/empty-500") {
+      res.writeHead(500);
+      res.end();
     } else {
       res.writeHead(404, { "Content-Type": "text/plain" });
       res.end("Not found");
@@ -82,6 +85,15 @@ describe("browser wrapper", () => {
     expect(err).toBeInstanceOf(NavigationError);
     expect(err.status).toBe(404);
     expect(err.message).toMatch(/HTTP 404/);
+    await closePage(page);
+  });
+
+  it("keeps the HTTP status for error responses with an empty body", async () => {
+    const page = await newPage(browser, { width: 800, height: 600 });
+    const err = await navigateTo(page, `${baseUrl}/empty-500`).catch((e) => e);
+    expect(err).toBeInstanceOf(NavigationError);
+    expect(err.status).toBe(500);
+    expect(err.message).toMatch(/HTTP 500/);
     await closePage(page);
   });
 

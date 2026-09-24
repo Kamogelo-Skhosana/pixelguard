@@ -6,14 +6,23 @@
 
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PNG } from "pngjs";
 import type { Browser } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeBrowser, launchBrowser, NavigationError } from "../src/capture/browser.js";
-import { captureUrl, captureViewports, DEFAULT_VIEWPORTS } from "../src/capture/capture.js";
+import { listTags, readManifest } from "../src/capture/storage.js";
+import {
+  buildPageUrl,
+  captureAllPages,
+  capturePages,
+  captureUrl,
+  captureViewports,
+  DEFAULT_VIEWPORTS,
+  pageName,
+} from "../src/capture/capture.js";
 
 const TALL_PAGE = `<!doctype html>
 <html><head><style>
@@ -57,7 +66,10 @@ function pixelAt(png: PNG, x: number, y: number): [number, number, number] {
 
 beforeAll(async () => {
   server = createServer((req, res) => {
-    if (req.url === "/responsive") {
+    if (req.url === "/" || req.url === "/about") {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(`<!doctype html><title>${req.url}</title><body>Page ${req.url}</body>`);
+    } else if (req.url === "/responsive") {
       res.writeHead(200, { "Content-Type": "text/html" });
       res.end(RESPONSIVE_PAGE);
     } else if (req.url === "/tall") {
@@ -183,6 +195,172 @@ describe("captureViewports", () => {
   });
 });
 
+describe("pageName", () => {
+  it.each([
+    ["/", "home"],
+    ["", "home"],
+    ["/about", "about"],
+    ["/about/", "about"],
+    ["/blog/Post 1", "blog-post-1"],
+    ["/search?q=shoes&page=2", "search-q-shoes-page-2"],
+    ["/checkout/", "checkout"],
+  ])("%s -> %s", (input, expected) => {
+    expect(pageName(input)).toBe(expected);
+  });
+
+  it("caps very long names at 100 characters", () => {
+    expect(pageName("/" + "a".repeat(300)).length).toBe(100);
+  });
+});
+
+describe("buildPageUrl", () => {
+  it.each([
+    ["http://x.com", "/", "http://x.com/"],
+    ["http://x.com/", "/about", "http://x.com/about"],
+    ["http://x.com/app", "settings", "http://x.com/app/settings"],
+  ])("%s + %s -> %s", (base, page, expected) => {
+    expect(buildPageUrl(base, page)).toBe(expected);
+  });
+});
+
+describe("capturePages", () => {
+  const twoViewports = DEFAULT_VIEWPORTS.filter((v) => v.name !== "tablet");
+
+  it("captures every page at every viewport in one run (P009)", async () => {
+    const results = await capturePages(browser, baseUrl, ["/", "/about"], twoViewports, (p, v) =>
+      join(outDir, "pages", v.name, `${p.name}.png`)
+    );
+
+    expect(results.map((r) => [r.page, r.name, r.url])).toEqual([
+      ["/", "home", `${baseUrl}/`],
+      ["/about", "about", `${baseUrl}/about`],
+    ]);
+    for (const r of results) {
+      expect(r.viewports.map((v) => [v.viewport, v.ok])).toEqual([
+        ["desktop", true],
+        ["mobile", true],
+      ]);
+    }
+    for (const file of ["desktop/home", "desktop/about", "mobile/home", "mobile/about"]) {
+      await expect(access(join(outDir, "pages", `${file}.png`))).resolves.toBeUndefined();
+    }
+  });
+
+  it("records a failing page and still captures the rest", async () => {
+    const results = await capturePages(
+      browser,
+      baseUrl,
+      ["/missing", "/about"],
+      twoViewports,
+      (p, v) => join(outDir, "mixed", v.name, `${p.name}.png`)
+    );
+    expect(results[0].viewports.every((v) => !v.ok)).toBe(true);
+    expect(results[1].viewports.every((v) => v.ok)).toBe(true);
+  });
+
+  it("refuses pages whose file names would collide, before capturing anything", async () => {
+    await expect(
+      capturePages(browser, baseUrl, ["/about-us", "/about/us"], twoViewports, () => {
+        throw new Error("should not capture");
+      })
+    ).rejects.toThrow(/"\/about-us" and "\/about\/us" would both be saved as "about-us"/);
+  });
+});
+
 describe("captureAllPages", () => {
-  it.todo("saves a screenshot per page/viewport combination under the given tag (P009-P010)");
+  const viewports = DEFAULT_VIEWPORTS.filter((v) => v.name !== "tablet");
+  const exists = (path: string) =>
+    access(path).then(
+      () => true,
+      () => false
+    );
+
+  it("saves <outputDir>/<tag>/<viewport>/<page>.png plus a manifest (P010)", async () => {
+    const outputDir = join(outDir, "run-basic");
+    const run = await captureAllPages({
+      baseUrl,
+      pages: ["/", "/about"],
+      viewports,
+      outputDir,
+      tag: "baseline",
+    });
+
+    expect(run.dir).toBe(join(outputDir, "baseline"));
+    expect(run.succeeded).toBe(4);
+    expect(run.failed).toBe(0);
+    for (const file of ["desktop/home", "desktop/about", "mobile/home", "mobile/about"]) {
+      expect(await exists(join(outputDir, "baseline", `${file}.png`))).toBe(true);
+    }
+
+    const manifest = await readManifest(outputDir, "baseline");
+    expect(manifest).toEqual(run.manifest);
+    expect(manifest.tag).toBe("baseline");
+    expect(manifest.baseUrl).toBe(baseUrl);
+    expect(manifest.pages.map((p) => p.name)).toEqual(["home", "about"]);
+    expect(manifest.pages[0].screenshots[0]).toMatchObject({
+      viewport: "desktop",
+      ok: true,
+      file: "desktop/home.png",
+      width: 1440,
+    });
+  });
+
+  it("keeps baseline and current side by side", async () => {
+    const outputDir = join(outDir, "run-tags");
+    for (const tag of ["baseline", "current"]) {
+      await captureAllPages({ baseUrl, pages: ["/"], viewports, outputDir, tag });
+    }
+    expect(await listTags(outputDir)).toEqual(["baseline", "current"]);
+  });
+
+  it("replaces a tag completely on re-capture, removing stale pages", async () => {
+    const outputDir = join(outDir, "run-replace");
+    await captureAllPages({
+      baseUrl,
+      pages: ["/", "/about"],
+      viewports,
+      outputDir,
+      tag: "current",
+    });
+    await captureAllPages({ baseUrl, pages: ["/"], viewports, outputDir, tag: "current" });
+
+    expect(await exists(join(outputDir, "current", "desktop", "home.png"))).toBe(true);
+    expect(await exists(join(outputDir, "current", "desktop", "about.png"))).toBe(false);
+    expect((await readManifest(outputDir, "current")).pages).toHaveLength(1);
+  });
+
+  it("records failed screenshots in the manifest", async () => {
+    const outputDir = join(outDir, "run-partial");
+    const run = await captureAllPages({
+      baseUrl,
+      pages: ["/", "/missing"],
+      viewports,
+      outputDir,
+      tag: "current",
+    });
+    expect([run.succeeded, run.failed]).toEqual([2, 2]);
+    expect(run.manifest.pages[1].screenshots[0]).toMatchObject({ ok: false, viewport: "desktop" });
+    expect(await exists(join(outputDir, "current", "desktop", "missing.png"))).toBe(false);
+  });
+
+  it("keeps the previous capture when every screenshot fails", async () => {
+    const outputDir = join(outDir, "run-allfail");
+    await captureAllPages({ baseUrl, pages: ["/"], viewports, outputDir, tag: "baseline" });
+    const before = await readManifest(outputDir, "baseline");
+
+    await expect(
+      captureAllPages({ baseUrl, pages: ["/missing"], viewports, outputDir, tag: "baseline" })
+    ).rejects.toThrow(/Every screenshot failed.*HTTP 404.*left unchanged/);
+
+    expect(await readManifest(outputDir, "baseline")).toEqual(before);
+    expect(await exists(join(outputDir, "baseline", "desktop", "home.png"))).toBe(true);
+    // No leftover temp folders.
+    expect(await readdir(outputDir)).toEqual(["baseline"]);
+  });
+
+  it("rejects an invalid tag before launching a browser", async () => {
+    await expect(
+      captureAllPages({ baseUrl, pages: ["/"], viewports, outputDir: outDir, tag: "../oops" })
+    ).rejects.toThrow(/Invalid tag/);
+  });
 });

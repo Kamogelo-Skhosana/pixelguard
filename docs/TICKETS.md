@@ -23,8 +23,8 @@ Suggested labels: `phase-1`, `phase-2`, `phase-3`, plus an epic label per group 
 - [x] **P006** — Add Playwright browser wrapper (`capture/browser.ts`) — launch, navigate, close
 - [x] **P007** — Implement full-page screenshot capture for a given URL
 - [x] **P008** — Implement capture across multiple viewport sizes (desktop/tablet/mobile)
-- [ ] **P009** — Implement capturing multiple named pages/routes in a single run
-- [ ] **P010** — Add baseline vs. current screenshot storage convention (tagged folders)
+- [x] **P009** — Implement capturing multiple named pages/routes in a single run
+- [x] **P010** — Add baseline vs. current screenshot storage convention (tagged folders)
 - [x] **P011** — Add config loading (target base URL, pages list, viewports, output dir)
 
 ### Epic: Diff Engine

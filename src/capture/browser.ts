@@ -10,7 +10,7 @@
  * Ticket: P006
  */
 
-import { chromium, type Browser, type Page } from "playwright";
+import { chromium, type Browser, type Page, type Response } from "playwright";
 
 export interface LaunchOptions {
   /** Run without a visible window (default: true). */
@@ -83,11 +83,27 @@ export async function navigateTo(
 ): Promise<void> {
   const { timeoutMs = 30_000, networkIdleMs = 5_000 } = options;
 
+  // Track the main document's HTTP status ourselves: for error responses
+  // with an empty body, Chromium makes page.goto() throw a generic
+  // ERR_HTTP_RESPONSE_CODE_FAILURE instead of returning the response.
+  let mainStatus: number | undefined;
+  const onResponse = (res: Response) => {
+    if (res.request().isNavigationRequest() && res.frame() === page.mainFrame()) {
+      mainStatus = res.status();
+    }
+  };
+  page.on("response", onResponse);
+
   let response;
   try {
     response = await page.goto(url, { waitUntil: "load", timeout: timeoutMs });
   } catch (err) {
+    if (mainStatus !== undefined && mainStatus >= 400) {
+      throw new NavigationError(url, `HTTP ${mainStatus}`, mainStatus);
+    }
     throw new NavigationError(url, (err as Error).message.split("\n")[0]);
+  } finally {
+    page.off("response", onResponse);
   }
 
   if (response && response.status() >= 400) {

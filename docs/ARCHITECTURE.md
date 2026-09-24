@@ -21,17 +21,22 @@ pixelguard has three logical layers, built up one per phase:
 
 - Uses Playwright to launch a browser and navigate to each configured page
 - Captures a full-page screenshot at each configured viewport size (desktop 1440×900, tablet 768×1024, mobile 390×844)
-- Saves screenshots into a tagged folder (e.g., `screenshots/baseline/`, `screenshots/current/`)
+- Saves each run into a tagged folder (e.g., `screenshots/baseline/`, `screenshots/current/`) with a `manifest.json` recording what was captured, when, and which screenshots failed
 
 ```
 screenshots/
 ├── baseline/
+│   ├── manifest.json
 │   ├── desktop/home.png
 │   └── mobile/home.png
 └── current/
+    ├── manifest.json
     ├── desktop/home.png
     └── mobile/home.png
 ```
+
+- Page paths become file-safe names (`/` → `home`, `/blog/post-1` → `blog-post-1`)
+- A run is written to a temporary folder first and only replaces the tag when it finishes, so a failed or interrupted run never wipes out an existing baseline. If every screenshot fails, the previous capture is kept.
 
 ## 2. Diff Layer (`src/diff/`)
 
