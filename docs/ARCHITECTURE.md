@@ -166,6 +166,7 @@ How regions are applied:
 ## 4. Report + Dashboard (`src/report/`, `src/dashboard/`)
 
 - Console output (Phase 1) and Markdown report (Phase 2) rendering — the report layout is designed in [REPORT_TEMPLATE.md](REPORT_TEMPLATE.md), with a rendered example in [examples/sample-report/report.md](../examples/sample-report/report.md)
+- `generateMarkdownReport()` (`src/report/markdown.ts`, P030) implements that design. A test regenerates the sample report from the run it describes and requires an exact match, so the design doc, the sample and the generator can't drift apart. Text from outside pixelguard (page names, explanations, notes, errors) is escaped so it can't add formatting, links, HTML or table columns; image links are relative to the report's folder
 - SQLite persistence of every run's results (Phase 2+)
 - Phase 3 dashboard: run history, side-by-side diff viewer, trend chart, and "accept as new baseline" action
 
