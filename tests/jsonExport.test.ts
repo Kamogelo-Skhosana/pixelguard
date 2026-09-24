@@ -124,7 +124,7 @@ describe("exportJson", () => {
       confidence: 9,
       explanation: "Matches the new footer.",
       observedChanges: ["Footer links reordered"],
-      judgedBy: "claude-sonnet-4-6",
+      judgedBy: "claude-sonnet-5",
     });
     await exportJson([judged], path);
     expect((await readJsonReport(path)).results[0]).toEqual(judged);

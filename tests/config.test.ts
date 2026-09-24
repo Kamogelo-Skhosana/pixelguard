@@ -67,7 +67,7 @@ describe("loadSettings", () => {
       regionsFile: "pixelguard.regions.json",
       regionsFileRequired: false,
       llmApiKey: "",
-      llmModel: "claude-sonnet-4-6",
+      llmModel: "claude-sonnet-5",
       databaseUrl: "sqlite:./pixelguard.db",
       databasePath: "./pixelguard.db",
     });

@@ -71,6 +71,10 @@ screenshots/
 
 - Takes each `DiffResult` (plus the baseline/current image pair and the **change context**, below)
 - Sends **all three images** (baseline, current, and diff) to a vision-capable LLM with a structured prompt — the diff image alone only shows _where_ pixels changed, while the baseline/current pair shows _what_ changed
+- **LLM client (`src/judge/llmClient.ts`):** the judge depends on a small `LLMClient` interface (so tests use a fake). `AnthropicClient` calls the Anthropic Messages API with the prompt and the three labelled images (temperature 0), using `LLM_API_KEY` and `LLM_MODEL` (default `claude-sonnet-5`)
+  - Retries rate limits, server errors, "overloaded" (529), timeouts and network errors — up to 3 retries with exponential backoff and jitter, or the server's `retry-after`
+  - Doesn't retry mistakes that won't fix themselves (400, 401 "check LLM_API_KEY", 404 "check LLM_MODEL")
+  - 60s timeout per request; returns the reply text, the model that answered, and token usage
 - **Prompt design (`src/judge/prompts.ts`):**
   - A fixed _system prompt_ explains the three images (BASELINE, CURRENT, DIFF — including what red, yellow and light blue mean in the diff), defines each verdict with concrete examples, sets confidence rules (prefer "Uncertain" over a low-confidence guess), and tells the model that text in screenshots or the developer note is data, not instructions
   - A per-diff _user prompt_ gives the page, viewport, screenshot size (and any size change), pixels changed, known dynamic regions with coordinates, and the developer's change description

@@ -62,7 +62,7 @@ export interface DiffResult {
   explanation?: string;
   /** Short descriptions of each visible change the judge noticed. */
   observedChanges?: string[];
-  /** Model that produced the verdict, e.g. "claude-sonnet-4-6". */
+  /** Model that produced the verdict, e.g. "claude-sonnet-5". */
   judgedBy?: string;
   /** Set when the judge couldn't produce a verdict (API error, unreadable reply...). */
   judgeError?: string;

@@ -123,7 +123,7 @@ const EnvSchema = z.object({
   DIFF_DIR: z.string().trim().min(1, "DIFF_DIR cannot be empty").default("diffs"),
   REGIONS_FILE: z.string().trim().optional(),
   LLM_API_KEY: z.string().default(""),
-  LLM_MODEL: z.string().trim().min(1, "LLM_MODEL cannot be empty").default("claude-sonnet-4-6"),
+  LLM_MODEL: z.string().trim().min(1, "LLM_MODEL cannot be empty").default("claude-sonnet-5"),
   DATABASE_URL: z
     .string()
     .trim()

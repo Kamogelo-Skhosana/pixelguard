@@ -37,14 +37,14 @@ const judgement: Judgement = {
 
 describe("withJudgement", () => {
   it("fills in the verdict fields on a copy", () => {
-    const judged = withJudgement(diff, judgement, "claude-sonnet-4-6");
+    const judged = withJudgement(diff, judgement, "claude-sonnet-5");
     expect(judged).toEqual({
       ...diff,
       verdict: "Real Bug",
       confidence: 8,
       explanation: "The button overlaps the price.",
       observedChanges: ["Button moved up"],
-      judgedBy: "claude-sonnet-4-6",
+      judgedBy: "claude-sonnet-5",
     });
     expect(diff.verdict).toBeUndefined(); // original untouched
   });
@@ -73,13 +73,13 @@ describe("withJudgement", () => {
 
 describe("withJudgeError", () => {
   it("marks the diff Uncertain for human review and records the error", () => {
-    const failed = withJudgeError(diff, "API timed out", "claude-sonnet-4-6");
+    const failed = withJudgeError(diff, "API timed out", "claude-sonnet-5");
     expect(failed).toEqual({
       ...diff,
       verdict: "Uncertain",
       explanation: "Could not be judged automatically: API timed out",
       judgeError: "API timed out",
-      judgedBy: "claude-sonnet-4-6",
+      judgedBy: "claude-sonnet-5",
     });
   });
 
