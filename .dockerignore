@@ -1,0 +1,26 @@
+# Keep the build context small and free of secrets. Ticket: P046
+.git
+.github
+node_modules
+dist
+coverage
+.env
+.env.*
+!.env.example
+*.db
+*.db-wal
+*.db-shm
+screenshots
+diffs
+demo-output
+pixelguard-data
+playwright-report
+test-results
+tests
+docs
+examples
+scripts
+*.log
+.vscode
+.idea
+.DS_Store

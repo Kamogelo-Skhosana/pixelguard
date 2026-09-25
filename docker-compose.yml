@@ -1,0 +1,52 @@
+# pixelguard with Docker Compose. Ticket: P046
+#
+#   cp .env.example .env              # then set TARGET_BASE_URL etc.
+#   docker compose up -d --build      # dashboard on http://localhost:8100
+#   docker compose run --rm pixelguard capture --tag baseline
+#   docker compose run --rm pixelguard capture --tag current
+#   docker compose run --rm pixelguard diff --baseline baseline --current current --judge
+#
+# Screenshots, diffs and the database live in ./pixelguard-data on your
+# computer, shared by both services.
+
+x-pixelguard: &pixelguard
+  build: .
+  image: pixelguard:local
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    # Where the app writes inside the container (the ./pixelguard-data mount).
+    OUTPUT_DIR: /data/screenshots
+    DIFF_DIR: /data/diffs
+    DATABASE_URL: sqlite:/data/pixelguard.db
+  volumes:
+    - ./pixelguard-data:/data
+  # Chromium needs more shared memory than Docker's 64 MB default.
+  shm_size: "1gb"
+  # Lets TARGET_BASE_URL=http://host.docker.internal:3000 reach a site running
+  # on your computer (built in on Docker Desktop, needed on Linux).
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+services:
+  dashboard:
+    <<: *pixelguard
+    command: ["dashboard"]
+    environment:
+      OUTPUT_DIR: /data/screenshots
+      DIFF_DIR: /data/diffs
+      DATABASE_URL: sqlite:/data/pixelguard.db
+      DASHBOARD_HOST: 0.0.0.0
+      DASHBOARD_PORT: "8100"
+    ports:
+      # Only this computer can open the dashboard (it can change baselines and
+      # has no login). Change to "8100:8100" to share it on your network.
+      - "127.0.0.1:8100:8100"
+    restart: unless-stopped
+
+  # One-off commands: docker compose run --rm pixelguard <command>
+  pixelguard:
+    <<: *pixelguard
+    profiles: ["cli"]
+    command: ["--help"]

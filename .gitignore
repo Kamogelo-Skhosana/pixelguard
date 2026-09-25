@@ -21,6 +21,10 @@ diffs/
 # Demo run output (npm run demo)
 demo-output/
 
+# Docker data folder (docker-compose.yml); kept in git so it exists with your permissions
+pixelguard-data/*
+!pixelguard-data/.gitkeep
+
 # Testing
 coverage/
 

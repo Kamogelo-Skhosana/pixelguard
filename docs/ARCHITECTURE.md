@@ -245,6 +245,25 @@ screenshots/_history/baseline/v2/            ...
 - `_history` can't be a tag name, so it never shows up as a capture
 - API: `GET /api/baselines/:tag/history`, `GET /api/baselines/:tag/versions/:version` (pages and image URLs), `GET /api/baselines/:tag/versions/:version/images/:viewport/:page` (only images listed in that version's manifest), and `POST /api/baselines/:tag/restore` `{ "version": n }` (JSON and same-origin only, like accept)
 
+## Docker (P046)
+
+- **`Dockerfile`**, two stages on `node:20-bookworm-slim`:
+  - _build_ runs `npm ci` from the lockfile, compiles TypeScript, then prunes dev dependencies.
+  - _runtime_ copies `node_modules`, `dist/` and `public/`, then installs Chromium and its system libraries with the project's own Playwright (`playwright install --with-deps chromium`), so the browser always matches the library version. The image is smaller than the all-browsers Playwright image.
+- **Runtime setup:**
+  - It runs as the unprivileged `node` user (uid 1000) with `/data` as the working directory.
+  - `OUTPUT_DIR`, `DIFF_DIR` and `DATABASE_URL` all point inside `/data`.
+  - `DASHBOARD_HOST=0.0.0.0` so the port mapping works.
+  - The entry point is the CLI, and the default command is `dashboard`.
+  - A `HEALTHCHECK` calls `/api/health`.
+- **`docker-compose.yml`** has two services built from the same image and sharing `./pixelguard-data:/data`:
+  - `dashboard` is long-running and published on `127.0.0.1:8100` only.
+  - `pixelguard` sits under the `cli` profile and runs one-off commands with `docker compose run --rm pixelguard …`.
+  - Both read `.env` (optional). Compose then overrides the data paths and `DASHBOARD_HOST`, so a local `.env` meant for running without Docker still works.
+  - `shm_size: 1gb` stops Chromium crashing on large pages, and `host.docker.internal` reaches a site running on the host.
+- **`.dockerignore`** keeps `.env`, databases, captures, `node_modules` and `.git` out of the build context.
+- **`tests/docker.test.ts`** checks these rules without needing Docker.
+
 ## Data Flow (end-to-end)
 
 1. User runs `pixelguard capture --tag current`

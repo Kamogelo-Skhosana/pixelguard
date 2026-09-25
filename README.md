@@ -107,6 +107,25 @@ Add `--fail-on-change` to make the diff fail (exit code 1) when anything changed
 
 Full setup instructions are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Run with Docker
+
+The image has everything pixelguard needs, Chromium included, so you don't need Node or Playwright on your computer.
+
+```bash
+cp .env.example .env                 # set TARGET_BASE_URL (and LLM_API_KEY for --judge)
+docker compose up -d --build         # dashboard on http://localhost:8100
+
+docker compose run --rm pixelguard capture --tag baseline
+docker compose run --rm pixelguard capture --tag current
+docker compose run --rm pixelguard diff --baseline baseline --current current --judge
+```
+
+- Screenshots, diffs and the database are kept in `./pixelguard-data`, shared by the dashboard and the commands.
+- The dashboard is only reachable from your own computer, because it can change baselines and has no login. To share it on your network, change the port to `"8100:8100"` in `docker-compose.yml`.
+- To test a site running on your computer, use `TARGET_BASE_URL=http://host.docker.internal:3000` (not `localhost`, which inside the container means the container itself).
+- On Linux, `./pixelguard-data` must be writable by user id 1000 (the container's user). It is if you cloned the repo as the usual first user; otherwise run `sudo chown 1000 pixelguard-data`.
+- Without Compose: `docker build -t pixelguard .`, then `docker run --rm -p 127.0.0.1:8100:8100 --env-file .env -e DASHBOARD_HOST=0.0.0.0 -v "$PWD/pixelguard-data:/data" pixelguard`.
+
 ## Project Structure
 
 ```
