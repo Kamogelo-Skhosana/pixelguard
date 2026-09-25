@@ -22,9 +22,11 @@ export interface AppOptions {
   db: Database.Database;
   /** Folder stored image paths are relative to (default: the current folder). */
   projectDir?: string;
+  /** Current time, for the trend window (tests pass a fixed date). */
+  now?: () => Date;
 }
 
-export function createApp({ db, projectDir = process.cwd() }: AppOptions): Express {
+export function createApp({ db, projectDir = process.cwd(), now }: AppOptions): Express {
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "100kb" }));
@@ -39,7 +41,7 @@ export function createApp({ db, projectDir = process.cwd() }: AppOptions): Expre
     });
   });
 
-  app.use("/api", createApiRouter(db, { projectDir }));
+  app.use("/api", createApiRouter(db, { projectDir, now }));
 
   // Anything else under /api that no route handled.
   app.use("/api", (req, res) => {

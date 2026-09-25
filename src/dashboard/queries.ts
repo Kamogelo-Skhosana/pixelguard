@@ -273,3 +273,125 @@ export function getImagePath(
     .get(diffId, runId) as PageDiffRow | undefined;
   return row ? imagePath(row, kind) : null;
 }
+
+// ---------------------------------------------------------------------------
+// Regression trend (P038)
+// ---------------------------------------------------------------------------
+
+export type TrendPeriod = "day" | "week" | "run";
+
+export interface TrendCounts {
+  runs: number;
+  failedRuns: number;
+  pagesChecked: number;
+  pagesFailed: number;
+  pagesReview: number;
+  realBugs: number;
+  acceptableChanges: number;
+  uncertain: number;
+  /** pagesFailed / pagesChecked (0-1), or null when nothing was checked. */
+  regressionRate: number | null;
+  /** failedRuns / runs (0-1), or null when there were no runs. */
+  failedRunRate: number | null;
+}
+
+export interface TrendPoint extends TrendCounts {
+  /** "2026-09-25" for day, the Monday "2026-09-21" for week, or the run's timestamp. */
+  label: string;
+  /** Set for period=run. */
+  runId?: number;
+}
+
+export interface TrendDto {
+  period: TrendPeriod;
+  /** First and last day covered (YYYY-MM-DD, UTC). */
+  from: string;
+  to: string;
+  points: TrendPoint[];
+  totals: TrendCounts;
+}
+
+export interface TrendOptions {
+  period: TrendPeriod;
+  /** How many days back from `now` to include (the current day counts as one). */
+  days: number;
+  targetUrl?: string;
+  now: Date;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const dayOf = (iso: string) => iso.slice(0, 10);
+const toDay = (d: Date) => d.toISOString().slice(0, 10);
+
+/** Monday (UTC) of the week containing the given YYYY-MM-DD day. */
+function weekStart(day: string): string {
+  const d = new Date(`${day}T00:00:00.000Z`);
+  const sinceMonday = (d.getUTCDay() + 6) % 7;
+  return toDay(new Date(d.getTime() - sinceMonday * DAY_MS));
+}
+
+const rate = (part: number, whole: number) =>
+  whole === 0 ? null : Math.round((part / whole) * 10_000) / 10_000;
+
+function tally(rows: RunRow[]): TrendCounts {
+  const sum = (fn: (r: RunRow) => number) => rows.reduce((n, r) => n + fn(r), 0);
+  const runs = rows.length;
+  const failedRuns = rows.filter((r) => r.status === "fail").length;
+  const pagesChecked = sum((r) => r.total_pages);
+  const pagesFailed = sum((r) => r.pages_fail);
+  return {
+    runs,
+    failedRuns,
+    pagesChecked,
+    pagesFailed,
+    pagesReview: sum((r) => r.pages_review),
+    realBugs: sum((r) => r.real_bugs),
+    acceptableChanges: sum((r) => r.acceptable_changes),
+    uncertain: sum((r) => r.uncertain),
+    regressionRate: rate(pagesFailed, pagesChecked),
+    failedRunRate: rate(failedRuns, runs),
+  };
+}
+
+/**
+ * Regression trend over the last `days` days. Day and week periods include
+ * empty buckets (runs: 0, rates null) so a chart shows gaps honestly.
+ */
+export function getTrend(db: Database.Database, options: TrendOptions): TrendDto {
+  const to = toDay(options.now);
+  const from = toDay(
+    new Date(new Date(`${to}T00:00:00.000Z`).getTime() - (options.days - 1) * DAY_MS)
+  );
+
+  const params: Record<string, unknown> = {
+    from: `${from}T00:00:00.000Z`,
+    to: `${to}T23:59:59.999Z`,
+  };
+  let sql = "SELECT * FROM runs WHERE created_at >= @from AND created_at <= @to";
+  if (options.targetUrl) {
+    sql += " AND target_url = @targetUrl";
+    params.targetUrl = options.targetUrl;
+  }
+  const rows = db.prepare(`${sql} ORDER BY created_at, id`).all(params) as RunRow[];
+
+  let points: TrendPoint[];
+  if (options.period === "run") {
+    points = rows.map((r) => ({ label: r.created_at, runId: r.id, ...tally([r]) }));
+  } else {
+    const keyOf = options.period === "day" ? dayOf : (iso: string) => weekStart(dayOf(iso));
+    const buckets = new Map<string, RunRow[]>();
+    // Every bucket in the window, oldest first, even the empty ones.
+    for (
+      let t = new Date(`${from}T00:00:00.000Z`).getTime();
+      t <= new Date(`${to}T00:00:00.000Z`).getTime();
+      t += DAY_MS
+    ) {
+      const key = keyOf(new Date(t).toISOString());
+      if (!buckets.has(key)) buckets.set(key, []);
+    }
+    for (const row of rows) buckets.get(keyOf(row.created_at))?.push(row);
+    points = [...buckets.entries()].map(([label, bucket]) => ({ label, ...tally(bucket) }));
+  }
+
+  return { period: options.period, from, to, points, totals: tally(rows) };
+}

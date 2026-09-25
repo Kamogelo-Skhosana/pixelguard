@@ -334,7 +334,9 @@ describe("GET /api/runs/:id (P037)", () => {
   });
 
   it("still routes /api/runs/trend separately (not as an id)", async () => {
-    expect((await get("/api/runs/trend")).status).toBe(501);
+    const r = await get("/api/runs/trend");
+    expect(r.status).toBe(200);
+    expect(r.body.period).toBe("day");
   });
 
   it("copes with an unreadable JSON column", async () => {

@@ -12,7 +12,14 @@ import type Database from "better-sqlite3";
 import { z } from "zod";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { getImagePath, getRunDetail, IMAGE_KINDS, listRuns, type ImageKind } from "./queries.js";
+import {
+  getImagePath,
+  getRunDetail,
+  getTrend,
+  IMAGE_KINDS,
+  listRuns,
+  type ImageKind,
+} from "./queries.js";
 
 /** Query string for GET /api/runs. */
 const RunListQuery = z
@@ -20,6 +27,15 @@ const RunListQuery = z
     limit: z.coerce.number().int().min(1).max(200).default(50),
     offset: z.coerce.number().int().min(0).default(0),
     status: z.enum(["pass", "review", "fail"]).optional(),
+    target: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+/** Query string for GET /api/runs/trend. */
+const TrendQuery = z
+  .object({
+    period: z.enum(["day", "week", "run"]).default("day"),
+    days: z.coerce.number().int().min(1).max(365).default(30),
     target: z.string().trim().min(1).optional(),
   })
   .strict();
@@ -38,6 +54,8 @@ const PositiveId = z.coerce.number().int().positive();
 export interface ApiOptions {
   /** Folder stored image paths are relative to (the project folder; default: cwd). */
   projectDir: string;
+  /** Current time, for the trend window (tests pass a fixed date). */
+  now?: () => Date;
 }
 
 export function createApiRouter(
@@ -59,10 +77,15 @@ export function createApiRouter(
 
   // NOTE: /runs/trend must be registered before /runs/:id, otherwise
   // Express matches "trend" as an :id value.
-  router.get("/runs/trend", (_req, res) => {
-    // TODO (P038): aggregate regression counts per run date for a
-    // trend chart.
-    res.status(501).json({ error: "Not implemented" });
+  router.get("/runs/trend", (req, res) => {
+    // GET /api/runs/trend?period=day&days=30&target=...  (P038)
+    const query = TrendQuery.safeParse(req.query);
+    if (!query.success) {
+      res.status(400).json({ error: "Invalid query", issues: describeIssues(query.error) });
+      return;
+    }
+    const { period, days, target } = query.data;
+    res.json(getTrend(db, { period, days, targetUrl: target, now: options.now?.() ?? new Date() }));
   });
 
   // GET /api/runs/:id  (P037) — one run with its pages and screenshots.
