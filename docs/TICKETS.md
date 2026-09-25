@@ -117,7 +117,7 @@ Suggested labels: `phase-1`, `phase-2`, `phase-3`, plus an epic label per group 
 
 ### Epic: Docs & Final Demo Readiness
 
-- [ ] **P048** — Polish full usage docs in the README (setup, screenshots, example output)
+- [x] **P048** — Polish full usage docs in the README (setup, screenshots, example output)
 - [ ] **P049** — Prepare a demo script / sample site walkthrough for presenting the project
 - [ ] **P050** — Final end-to-end test pass across all three phases; tag `v1.0` release
 

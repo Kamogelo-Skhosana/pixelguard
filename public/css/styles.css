@@ -845,3 +845,7 @@ table.runs {
   background: var(--surface-sunk);
   border-radius: var(--radius);
 }
+/* Keep "baseline → current" on one line under the target (P048). */
+.runs td .mono {
+  white-space: nowrap;
+}
