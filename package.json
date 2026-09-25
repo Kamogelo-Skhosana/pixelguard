@@ -10,12 +10,13 @@
   "scripts": {
     "pixelguard": "tsx src/cli.ts",
     "build": "tsc -p tsconfig.build.json",
-    "lint": "eslint src tests scripts",
+    "lint": "eslint src tests scripts examples",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "fixtures:diff": "tsx scripts/generate-diff-fixtures.ts",
+    "demo": "tsx scripts/demo.ts",
     "dev:dashboard": "tsx src/dashboard/server.ts"
   },
   "dependencies": {

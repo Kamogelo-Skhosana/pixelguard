@@ -80,7 +80,7 @@ Suggested labels: `phase-1`, `phase-2`, `phase-3`, plus an epic label per group 
 
 ### Epic: Phase 2 Wrap-up
 
-- [ ] **P034** — End-to-end test: full pipeline (capture → diff → AI judgment → Markdown report) + demo readiness pass
+- [x] **P034** — End-to-end test: full pipeline (capture → diff → AI judgment → Markdown report) + demo readiness pass
 
 **Phase 2 checkpoint:** Run the full pipeline against the same test target with an intentional trivial change (e.g., a date) and an intentional real bug (e.g., a broken layout) — confirm the verdicts correctly tell them apart.
 

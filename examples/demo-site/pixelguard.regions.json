@@ -1,0 +1,11 @@
+{
+  "regions": [
+    {
+      "page": "*",
+      "label": "Live clock",
+      "kind": "timestamp",
+      "selector": "#live-clock",
+      "handling": "ignore"
+    }
+  ]
+}

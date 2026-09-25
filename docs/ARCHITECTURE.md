@@ -225,3 +225,9 @@ Tests never call a real LLM API (so CI needs no API key and costs nothing):
 - `tests/helpers/mockLLM.ts` — a shared `MockLLM` with queued or per-screenshot replies, ready-made realistic replies (`REPLIES`: clean, fenced, with extra text or fields, and several broken ones) and API errors (`ERRORS`)
 - `tests/setup/blockLiveLLM.ts` — runs before every test file and blocks any request to `api.anthropic.com`, so an accidental live call fails immediately
 - `tests/judgeScenarios.test.ts` — real sample screenshots and the real diff engine and judge, with only the LLM mocked: every verdict, messy-but-valid replies, unreadable replies, API failures, and a mixed multi-page run
+
+## End-to-end test and demo (P034)
+
+- `examples/demo-site/` is a small demo shop with two versions: version 2 changes the home page's "last updated" date (harmless) and breaks the pricing layout (overlapping cards). Every page shows a live clock, which `examples/demo-site/pixelguard.regions.json` marks as an ignored region
+- `tests/e2e.test.ts` runs the real CLI against it — capture, site change, capture, diff, judge, report, JSON and database — with only the LLM mocked. It checks that exactly the changed pages are flagged (the clock is ignored), only changed screenshots reach the judge, pages roll up correctly, `--fail-on-bug` fails the run, the report's images exist, and the database matches the JSON
+- `npm run demo` runs the same flow with the real model (when `LLM_API_KEY` is set) — the Phase 2 checkpoint: the judge should call the date change acceptable and the pricing layout a real bug. Output goes to `demo-output/` (git-ignored)

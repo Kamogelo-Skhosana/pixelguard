@@ -18,6 +18,9 @@ diffs/
 # ...except the sample report's images, which are part of the docs
 !examples/sample-report/diffs/
 
+# Demo run output (npm run demo)
+demo-output/
+
 # Testing
 coverage/
 

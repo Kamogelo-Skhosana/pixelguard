@@ -28,6 +28,18 @@ pixelguard is built in three phases, each ending in something tangible and demoa
 | **Phase 2 — AI Judgment Layer**          | Separate real bugs from noise         | The same CLI now outputs a **verdict per page** (Real Bug / Acceptable Change / Uncertain) with plain-English reasoning, in a Markdown report |
 | **Phase 3 — Dashboard & History**        | Make it demoable and manage baselines | A deployed web dashboard showing run history, a side-by-side diff viewer, trend charts, and a one-click "accept as new baseline" action       |
 
+## Try the Demo
+
+A small demo shop is bundled in [`examples/demo-site/`](examples/demo-site/). One command runs the whole pipeline against it:
+
+```bash
+npm run demo
+```
+
+It captures the shop, then switches to a new version with two changes — a harmless date update on the home page and a real layout bug on the pricing page (overlapping cards) — captures again, diffs, and writes `demo-output/report.md`. A live clock on every page is marked as an ignored region, so it never counts as a change.
+
+With `LLM_API_KEY` set in `.env`, the AI judge runs too, and should call the date change an **Acceptable Change** and the pricing layout a **Real Bug**. Without a key, you still get the pixel diff and report.
+
 ## Tech Stack
 
 - **Screenshot capture:** [Playwright](https://playwright.dev/) (multi-browser, multi-viewport)
@@ -82,6 +94,7 @@ pixelguard/
 ├── tests/                      # Unit + integration tests, mirrors src/ layout
 │   └── fixtures/diff/          # Sample baseline/current image pairs for diff tests
 ├── scripts/
+│   ├── demo.ts                # npm run demo — full pipeline against the demo site
 │   └── generate-diff-fixtures.ts  # Regenerates tests/fixtures/diff (npm run fixtures:diff)
 ├── docs/
 │   ├── ARCHITECTURE.md        # System design, data flow, setup details
@@ -89,7 +102,9 @@ pixelguard/
 │   ├── ROADMAP.md             # Phase breakdown + tangible deliverables
 │   └── TICKETS.md             # All 50 tickets, grouped by phase and epic
 ├── examples/
-│   └── baseline/               # Sample baseline screenshots for testing the diff engine
+│   ├── baseline/               # Sample baseline screenshots for testing the diff engine
+│   ├── demo-site/              # Demo shop used by npm run demo and the end-to-end test
+│   └── sample-report/          # Example Markdown report
 ├── .env.example
 ├── pixelguard.regions.example.json  # Example known dynamic regions (copy to pixelguard.regions.json)
 ├── .gitignore
