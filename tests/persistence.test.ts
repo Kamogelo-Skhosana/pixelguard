@@ -10,9 +10,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import type { DiffResult } from "../src/diff/models.js";
 import {
   getDatabase,
+  loadRun,
   migrate,
+  saveRun,
   SCHEMA_VERSION,
   schemaVersion,
   type RunRow,
@@ -248,5 +251,200 @@ describe("schema rules", () => {
     insertDiff(runId, { viewport: "mobile" });
     db.prepare("DELETE FROM runs WHERE id = ?").run(runId);
     expect((db.prepare("SELECT COUNT(*) AS n FROM page_diffs").get() as { n: number }).n).toBe(0);
+  });
+});
+
+function result(page: string, viewport: string, extra: Partial<DiffResult> = {}): DiffResult {
+  return {
+    page,
+    viewport,
+    pixelDiffCount: 0,
+    totalPixels: 1000,
+    percentChanged: 0,
+    changed: false,
+    sizeChanged: false,
+    baselineSize: { width: 100, height: 10 },
+    currentSize: { width: 100, height: 10 },
+    diffImagePath: `diffs/b-vs-c/${viewport}/${page}.png`,
+    baselineImagePath: `screenshots/baseline/${viewport}/${page}.png`,
+    currentImagePath: `screenshots/current/${viewport}/${page}.png`,
+    ...extra,
+  };
+}
+
+describe("saveRun (P033)", () => {
+  const judgedRun = () => ({
+    targetUrl: "https://shop.example.com",
+    baselineTag: "baseline",
+    currentTag: "current",
+    changeDescription: "New checkout button",
+    createdAt: new Date("2026-09-25T09:00:00.000Z"),
+    reportPath: "report.md",
+    jsonPath: "diffs.json",
+    results: [
+      result("checkout", "desktop", {
+        changed: true,
+        pixelDiffCount: 120,
+        percentChanged: 12,
+        verdict: "Acceptable Change",
+        confidence: 9,
+        explanation: "Matches the note.",
+        observedChanges: ["Button is green"],
+        judgedBy: "claude-sonnet-5",
+        expectedChangeRegions: [
+          { label: "Promo", kind: "ad", rect: { x: 0, y: 0, width: 10, height: 5 } },
+        ],
+      }),
+      result("checkout", "mobile", {
+        changed: true,
+        pixelDiffCount: 50,
+        percentChanged: 5,
+        sizeChanged: true,
+        currentSize: { width: 100, height: 12 },
+        verdict: "Real Bug",
+        confidence: 8,
+        explanation: "Button overlaps price.",
+        judgedBy: "claude-sonnet-5",
+        ignoredRegions: [{ label: "Clock", rect: { x: 1, y: 2, width: 3, height: 4 } }],
+      }),
+      result("home", "desktop"),
+    ],
+    skipped: [{ page: "blog", viewport: "desktop", reason: 'not in "current"' }],
+  });
+
+  it("saves the run with its summary and returns its id", () => {
+    const id = saveRun(db, judgedRun());
+    const saved = loadRun(db, id)!;
+    expect(saved.run).toEqual({
+      id,
+      created_at: "2026-09-25T09:00:00.000Z",
+      target_url: "https://shop.example.com",
+      baseline_tag: "baseline",
+      current_tag: "current",
+      change_description: "New checkout button",
+      status: "fail",
+      headline: "FAIL: 1 real bug on 1 page, 1 not compared, 1 acceptable change (3 pages checked)",
+      judged: 1,
+      judge_model: "claude-sonnet-5",
+      total_pages: 3,
+      pages_pass: 1,
+      pages_review: 1,
+      pages_fail: 1,
+      screenshots_total: 3,
+      screenshots_changed: 2,
+      real_bugs: 1,
+      acceptable_changes: 1,
+      uncertain: 0,
+      judge_errors: 0,
+      not_judged: 0,
+      skipped: 1,
+      report_path: "report.md",
+      json_path: "diffs.json",
+    });
+  });
+
+  it("saves one page_diffs row per screenshot, including skipped ones", () => {
+    const { diffs } = loadRun(db, saveRun(db, judgedRun()))!;
+    expect(diffs.map((d) => [d.page, d.viewport, d.status, d.compared])).toEqual([
+      ["checkout", "desktop", "pass", 1],
+      ["checkout", "mobile", "fail", 1],
+      ["home", "desktop", "pass", 1],
+      ["blog", "desktop", "review", 0],
+    ]);
+  });
+
+  it("stores the verdict, sizes, image paths and JSON fields", () => {
+    const { diffs } = loadRun(db, saveRun(db, judgedRun()))!;
+    const [desktop, mobile, home, blog] = diffs;
+    expect(desktop).toMatchObject({
+      changed: 1,
+      pixel_diff_count: 120,
+      total_pixels: 1000,
+      percent_changed: 12,
+      verdict: "Acceptable Change",
+      confidence: 9,
+      explanation: "Matches the note.",
+      judged_by: "claude-sonnet-5",
+      judge_error: null,
+      ignored_regions: null,
+      diff_image_path: "diffs/b-vs-c/desktop/checkout.png",
+      baseline_image_path: "screenshots/baseline/desktop/checkout.png",
+    });
+    expect(JSON.parse(desktop.observed_changes!)).toEqual(["Button is green"]);
+    expect(JSON.parse(desktop.expected_change_regions!)[0].label).toBe("Promo");
+
+    expect(mobile).toMatchObject({ size_changed: 1, current_height: 12, baseline_height: 10 });
+    expect(JSON.parse(mobile.ignored_regions!)).toEqual([
+      { label: "Clock", rect: { x: 1, y: 2, width: 3, height: 4 } },
+    ]);
+    expect(mobile.observed_changes).toBeNull(); // not given
+
+    expect(home).toMatchObject({ changed: 0, verdict: null, confidence: null });
+    expect(blog).toMatchObject({
+      skip_reason: 'not in "current"',
+      changed: null,
+      diff_image_path: null,
+    });
+  });
+
+  it("records a run that wasn't judged, and a failed judgement", () => {
+    const id = saveRun(db, {
+      baselineTag: "a",
+      currentTag: "b",
+      results: [
+        result("home", "desktop", { changed: true, pixelDiffCount: 3, percentChanged: 0.3 }),
+        result("home", "mobile", {
+          changed: true,
+          pixelDiffCount: 3,
+          percentChanged: 0.3,
+          verdict: "Uncertain",
+          explanation: "Could not be judged automatically: timeout",
+          judgeError: "timeout",
+          judgedBy: "claude-sonnet-5",
+        }),
+      ],
+    });
+    const { run, diffs } = loadRun(db, id)!;
+    expect(run).toMatchObject({
+      status: "review",
+      judged: 1,
+      not_judged: 1,
+      judge_errors: 1,
+      target_url: null,
+      change_description: null,
+    });
+    expect(diffs[1]).toMatchObject({
+      verdict: "Uncertain",
+      judge_error: "timeout",
+      confidence: null,
+    });
+  });
+
+  it("marks runs without any verdicts as not judged", () => {
+    const { run } = loadRun(db, saveRun(db, { baselineTag: "a", currentTag: "b", results: [] }))!;
+    expect(run).toMatchObject({ judged: 0, judge_model: null, status: "pass", total_pages: 0 });
+  });
+
+  it("keeps separate runs separate, with increasing ids", () => {
+    const first = saveRun(db, judgedRun());
+    const second = saveRun(db, { ...judgedRun(), results: [], skipped: [] });
+    expect(second).toBeGreaterThan(first);
+    expect(loadRun(db, first)!.diffs).toHaveLength(4);
+    expect(loadRun(db, second)!.diffs).toHaveLength(0);
+  });
+
+  it("saves nothing at all if any row fails (single transaction)", () => {
+    const broken = {
+      baselineTag: "a",
+      currentTag: "b",
+      results: [result("home", "desktop"), result("home", "desktop")], // duplicate page/viewport
+    };
+    expect(() => saveRun(db, broken)).toThrow(/UNIQUE/);
+    expect((db.prepare("SELECT COUNT(*) AS n FROM runs").get() as { n: number }).n).toBe(0);
+    expect((db.prepare("SELECT COUNT(*) AS n FROM page_diffs").get() as { n: number }).n).toBe(0);
+  });
+
+  it("loadRun returns null for a run that doesn't exist", () => {
+    expect(loadRun(db, 42)).toBeNull();
   });
 });

@@ -35,6 +35,7 @@ import {
 } from "./report/console.js";
 import { exportJson } from "./report/jsonExport.js";
 import { generateMarkdownReport, writeReport } from "./report/markdown.js";
+import { getDatabase, saveRun } from "./report/persistence.js";
 
 export const EXIT_OK = 0;
 export const EXIT_CHANGES = 1;
@@ -129,6 +130,8 @@ export interface DiffCommandOptions {
   output?: string;
   /** Write the Markdown report here (P031). */
   report?: string;
+  /** Save the run to the database (default: true; --no-save turns it off) (P033). */
+  save?: boolean;
   threshold?: number;
   failOnChange?: boolean;
   /** Short description of what changed in this build (P020). */
@@ -264,6 +267,32 @@ export async function runDiff(
         skipped: run.skipped,
       });
       io.out(`JSON results: ${options.output}`);
+    }
+
+    // Saved before any --fail-on-* exit, like the report. A database problem is
+    // reported as a warning so it never hides the results or changes the exit code.
+    if (options.save !== false) {
+      try {
+        const db = getDatabase(settings.databasePath);
+        try {
+          const runId = saveRun(db, {
+            results,
+            skipped: run.skipped,
+            targetUrl: run.targetUrl,
+            baselineTag: options.baseline,
+            currentTag: options.current,
+            changeDescription: context.changeDescription,
+            createdAt: (deps.now ?? (() => new Date()))(),
+            reportPath: options.report,
+            jsonPath: options.output,
+          });
+          io.out(`Saved as run #${runId} in ${settings.databasePath}`);
+        } finally {
+          db.close();
+        }
+      } catch (err) {
+        io.err(`Warning: couldn't save this run to the database: ${(err as Error).message}`);
+      }
     }
 
     // Written before any --fail-on-* exit: failing runs are when the report matters most.

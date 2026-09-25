@@ -17,6 +17,7 @@ import { EXIT_CHANGES, EXIT_ERROR, EXIT_OK, type CommandIO } from "../src/comman
 import { ConfigError, DEFAULT_VIEWPORTS, type Settings } from "../src/config.js";
 import { readJsonReport } from "../src/report/jsonExport.js";
 import type { LLMClient } from "../src/judge/llmClient.js";
+import { getDatabase, loadRun } from "../src/report/persistence.js";
 
 let server: Server;
 let root: string;
@@ -199,6 +200,47 @@ describe("pixelguard CLI (P015)", () => {
     expect(md).toContain("> ⚠️ **REVIEW:** 2 changed but not judged");
     expect(md).toContain("| **Judge** | not judged |");
     expect(md).toContain("#### desktop — Changed (not judged)");
+  });
+
+  describe("saving runs to the database (P033)", () => {
+    const diffArgs = ["diff", "--baseline", "baseline", "--current", "current"];
+
+    it("saves each diff run and says where", async () => {
+      const databasePath = join(root, "db", "pixelguard.db");
+      const first = await run(diffArgs, { databasePath });
+      const second = await run([...diffArgs, "--change", "Second run"], { databasePath });
+      expect(first.out).toContain(`Saved as run #1 in ${databasePath}`);
+      expect(second.out).toContain(`Saved as run #2 in ${databasePath}`);
+
+      const db = getDatabase(databasePath);
+      const saved = loadRun(db, 2)!;
+      db.close();
+      expect(saved.run).toMatchObject({
+        baseline_tag: "baseline",
+        current_tag: "current",
+        change_description: "Second run",
+        target_url: settings.targetBaseUrl,
+        created_at: "2026-09-25T01:00:00.000Z",
+        screenshots_changed: 2,
+        judged: 0,
+      });
+      expect(saved.diffs).toHaveLength(4);
+    });
+
+    it("--no-save skips the database", async () => {
+      const databasePath = join(root, "db", "unused.db");
+      const r = await run([...diffArgs, "--no-save"], { databasePath });
+      expect(r.out).not.toContain("Saved as run");
+      await expect(access(databasePath)).rejects.toThrow();
+    });
+
+    it("a database problem is a warning and doesn't change the exit code", async () => {
+      const r = await run([...diffArgs, "--fail-on-change"], { databasePath: root }); // a folder
+      expect(r.err).toContain("Warning: couldn't save this run to the database");
+      expect(r.code).toBe(EXIT_CHANGES); // decided by --fail-on-change, not the save
+      const ok = await run(diffArgs, { databasePath: root });
+      expect(ok.code).toBe(EXIT_OK);
+    });
   });
 
   it("prints config errors without a stack trace and exits 2", async () => {

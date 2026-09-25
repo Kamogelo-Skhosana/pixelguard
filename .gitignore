@@ -8,6 +8,8 @@ dist/
 
 # Database
 *.db
+*.db-wal
+*.db-shm
 pixelguard.db
 
 # Screenshots & diffs (generated per run, not committed)

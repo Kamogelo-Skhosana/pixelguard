@@ -7,7 +7,7 @@
  *   pixelguard diff --baseline <tag> --current <tag> [--output diffs.json]
  *                   [--threshold 0.1] [--fail-on-change]
  *                   [--change "<what changed>" | --change-file notes.txt] [--judge]
- *                   [--fail-on-bug] [--report report.md]
+ *                   [--fail-on-bug] [--report report.md] [--no-save]
  *
  * Exit codes: 0 success, 1 changes found with --fail-on-change or a Real Bug
  * with --fail-on-bug, 2 error.
@@ -106,6 +106,7 @@ export function createProgram(deps: ProgramDeps = {}): Command {
       "With --judge: exit with code 1 if the judge found a Real Bug (for CI)"
     )
     .option("--report <path>", "Write a Markdown report (with AI verdicts when used with --judge)")
+    .option("--no-save", "Don't save this run to the database (DATABASE_URL)")
     .action(
       (
         opts: {
@@ -119,6 +120,7 @@ export function createProgram(deps: ProgramDeps = {}): Command {
           changeFile?: string;
           judge?: boolean;
           failOnBug?: boolean;
+          save?: boolean;
         },
         cmd: Command
       ) => {

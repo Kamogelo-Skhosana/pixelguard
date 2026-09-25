@@ -167,7 +167,13 @@ How regions are applied:
 
 - Console output (Phase 1) and Markdown report (Phase 2) rendering — the report layout is designed in [REPORT_TEMPLATE.md](REPORT_TEMPLATE.md), with a rendered example in [examples/sample-report/report.md](../examples/sample-report/report.md)
 - `generateMarkdownReport()` (`src/report/markdown.ts`, P030) implements that design. A test regenerates the sample report from the run it describes and requires an exact match, so the design doc, the sample and the generator can't drift apart. Text from outside pixelguard (page names, explanations, notes, errors) is escaped so it can't add formatting, links, HTML or table columns; image links are relative to the report's folder
-- SQLite persistence of every run's results (Phase 2+)
+- SQLite persistence of every run's results (Phase 2+) — `src/report/persistence.ts`:
+  - `runs`: one row per diff run — when, target, tags, developer note, overall status and headline, whether it was judged (and by which model), page and verdict counts, and paths to the report/JSON
+  - `page_diffs`: one row per page/viewport in a run — its rollup status, pixel diff numbers, sizes, image paths, verdict, confidence, explanation, observed changes (JSON), judge error and regions (JSON). Screenshots that couldn't be compared are stored too (`compared = 0` plus a `skip_reason`)
+  - Constraints reject bad data (unknown statuses or verdicts, confidence outside 1–10, percentages over 100, duplicate page/viewport rows in a run); deleting a run deletes its page diffs
+  - The schema version lives in SQLite's `user_version`; `getDatabase()` applies pending migrations in a transaction, and refuses a database created by a newer pixelguard
+  - File databases use WAL journaling so the dashboard can read while a run is saved; `:memory:` works for tests
+  - **Saving (P033):** every `pixelguard diff` run is saved with `saveRun()` — the run row plus one `page_diffs` row per screenshot (skipped ones too), in a single transaction so a run is saved completely or not at all. It's saved before any `--fail-on-*` exit. `--no-save` turns it off. If saving fails, a warning is printed and the exit code is unchanged, so a database problem can't hide results or break CI. Image paths are stored as given (relative to the project folder)
 - Phase 3 dashboard: run history, side-by-side diff viewer, trend chart, and "accept as new baseline" action
 
 ## CLI
@@ -181,6 +187,7 @@ pixelguard diff --baseline <tag> --current <tag> [--output diffs.json] [--thresh
 - `diff` pairs the two captures using their manifests, writes diff images to `diffs/<baseline>-vs-<current>/<viewport>/<page>.png`, prints a table, and lists anything it couldn't compare (new, removed or failed pages)
 - `--change "<text>"` (or `--change-file notes.txt`, or the `PIXELGUARD_CHANGE` environment variable in CI) describes what changed in this build; it's shown in the output, saved in the JSON report, and given to the AI judge in Phase 2. Max 1000 characters; an explicit `--change-file` wins over `PIXELGUARD_CHANGE`
 - `--fail-on-bug` (with `--judge`) exits with code 1 only when the judge finds a Real Bug — the CI-friendly option once judging is on, since acceptable changes don't fail the build
+- `--no-save` skips saving the run to the database (runs are saved by default, for the Phase 3 dashboard)
 - `--report report.md` writes the Markdown report (see [REPORT_TEMPLATE.md](REPORT_TEMPLATE.md)). With `--judge` it includes verdicts and explanations; without, it's a visual change log with every change marked "not judged". It's written before any `--fail-on-*` exit, so failing CI runs still get a report
 - `--judge` asks the AI judge for a verdict on each changed screenshot (needs `LLM_API_KEY`; fails fast with exit code 2 if it's missing)
 - `--output` also writes the results as JSON; `--threshold` sets pixel colour sensitivity (0-1); `--fail-on-change` makes the command fail when anything changed, for CI

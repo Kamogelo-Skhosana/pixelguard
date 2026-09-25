@@ -15,12 +15,16 @@
  * getDatabase() applies any newer migrations in a transaction, so existing
  * databases upgrade in place when the schema changes later.
  *
+ * saveRun() (P033) stores a whole run in one transaction; loadRun() reads it back.
+ *
  * Tickets: P032, P033
  */
 
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
+import type { DiffResult } from "../diff/models.js";
+import { rollupPages, summarizeRun, type SkippedScreenshot } from "../judge/aggregate.js";
 
 /** Ordered schema migrations. Index + 1 is the schema version it produces. */
 export const MIGRATIONS: readonly string[] = [
@@ -228,7 +232,183 @@ export function getDatabase(databasePath: string): Database.Database {
   return db;
 }
 
-export function saveRun(_db: Database.Database, _targetUrl: string, _results: unknown[]): void {
-  // TODO (P033): insert a run row and related page_diffs rows.
-  throw new Error("Not implemented");
+export interface SaveRunInput {
+  results: DiffResult[];
+  /** Screenshots that couldn't be compared — stored with compared = 0. */
+  skipped?: SkippedScreenshot[];
+  targetUrl?: string;
+  baselineTag: string;
+  currentTag: string;
+  changeDescription?: string;
+  /** When the run happened (default: now). */
+  createdAt?: Date;
+  reportPath?: string;
+  jsonPath?: string;
+}
+
+const toJson = (value: unknown[] | undefined): string | null =>
+  value && value.length > 0 ? JSON.stringify(value) : null;
+const bool = (value: boolean): 0 | 1 => (value ? 1 : 0);
+
+/**
+ * Saves a diff run: one runs row plus one page_diffs row per page/viewport
+ * (including screenshots that couldn't be compared). Everything is written
+ * in a single transaction, so a run is saved completely or not at all.
+ * Returns the new run's id.
+ */
+export function saveRun(db: Database.Database, input: SaveRunInput): number {
+  const skipped = input.skipped ?? [];
+  const summary = summarizeRun(input.results, skipped);
+  const pages = rollupPages(input.results, skipped);
+  const models = [...new Set(input.results.map((r) => r.judgedBy).filter(Boolean))];
+
+  // Status of each screenshot, as decided by the page rollup (P026).
+  const statusOf = new Map<string, PageStatusValue>();
+  for (const page of pages) {
+    for (const v of page.viewports) statusOf.set(`${page.page}\u0000${v.viewport}`, v.status);
+  }
+  const status = (page: string, viewport: string) =>
+    statusOf.get(`${page}\u0000${viewport}`) ?? "review";
+
+  const insertRun = db.prepare(`
+    INSERT INTO runs (
+      created_at, target_url, baseline_tag, current_tag, change_description,
+      status, headline, judged, judge_model,
+      total_pages, pages_pass, pages_review, pages_fail,
+      screenshots_total, screenshots_changed,
+      real_bugs, acceptable_changes, uncertain, judge_errors, not_judged, skipped,
+      report_path, json_path
+    ) VALUES (
+      @created_at, @target_url, @baseline_tag, @current_tag, @change_description,
+      @status, @headline, @judged, @judge_model,
+      @total_pages, @pages_pass, @pages_review, @pages_fail,
+      @screenshots_total, @screenshots_changed,
+      @real_bugs, @acceptable_changes, @uncertain, @judge_errors, @not_judged, @skipped,
+      @report_path, @json_path
+    )`);
+
+  const insertDiff = db.prepare(`
+    INSERT INTO page_diffs (
+      run_id, page, viewport, status, compared, skip_reason,
+      changed, pixel_diff_count, total_pixels, percent_changed, size_changed,
+      baseline_width, baseline_height, current_width, current_height,
+      baseline_image_path, current_image_path, diff_image_path,
+      verdict, confidence, explanation, observed_changes, judged_by, judge_error,
+      ignored_regions, expected_change_regions
+    ) VALUES (
+      @run_id, @page, @viewport, @status, @compared, @skip_reason,
+      @changed, @pixel_diff_count, @total_pixels, @percent_changed, @size_changed,
+      @baseline_width, @baseline_height, @current_width, @current_height,
+      @baseline_image_path, @current_image_path, @diff_image_path,
+      @verdict, @confidence, @explanation, @observed_changes, @judged_by, @judge_error,
+      @ignored_regions, @expected_change_regions
+    )`);
+
+  const save = db.transaction((): number => {
+    const runId = Number(
+      insertRun.run({
+        created_at: (input.createdAt ?? new Date()).toISOString(),
+        target_url: input.targetUrl ?? null,
+        baseline_tag: input.baselineTag,
+        current_tag: input.currentTag,
+        change_description: input.changeDescription || null,
+        status: summary.status,
+        headline: summary.headline,
+        judged: bool(models.length > 0),
+        judge_model: models.length > 0 ? models.join(", ") : null,
+        total_pages: summary.totalPages,
+        pages_pass: summary.pages.pass,
+        pages_review: summary.pages.review,
+        pages_fail: summary.pages.fail,
+        screenshots_total: summary.screenshots.total,
+        screenshots_changed: summary.screenshots.changed,
+        real_bugs: summary.realBugs,
+        acceptable_changes: summary.acceptableChanges,
+        uncertain: summary.uncertain,
+        judge_errors: summary.judgeErrors,
+        not_judged: summary.notJudged,
+        skipped: summary.skipped,
+        report_path: input.reportPath ?? null,
+        json_path: input.jsonPath ?? null,
+      }).lastInsertRowid
+    );
+
+    for (const r of input.results) {
+      insertDiff.run({
+        run_id: runId,
+        page: r.page,
+        viewport: r.viewport,
+        status: status(r.page, r.viewport),
+        compared: 1,
+        skip_reason: null,
+        changed: bool(r.changed),
+        pixel_diff_count: r.pixelDiffCount,
+        total_pixels: r.totalPixels,
+        percent_changed: r.percentChanged,
+        size_changed: bool(r.sizeChanged),
+        baseline_width: r.baselineSize.width,
+        baseline_height: r.baselineSize.height,
+        current_width: r.currentSize.width,
+        current_height: r.currentSize.height,
+        baseline_image_path: r.baselineImagePath,
+        current_image_path: r.currentImagePath,
+        diff_image_path: r.diffImagePath,
+        verdict: r.verdict ?? null,
+        confidence: r.confidence ?? null,
+        explanation: r.explanation ?? null,
+        observed_changes: toJson(r.observedChanges),
+        judged_by: r.judgedBy ?? null,
+        judge_error: r.judgeError ?? null,
+        ignored_regions: toJson(r.ignoredRegions),
+        expected_change_regions: toJson(r.expectedChangeRegions),
+      });
+    }
+
+    for (const s of skipped) {
+      insertDiff.run({
+        run_id: runId,
+        page: s.page,
+        viewport: s.viewport,
+        status: "review",
+        compared: 0,
+        skip_reason: s.reason,
+        changed: null,
+        pixel_diff_count: null,
+        total_pixels: null,
+        percent_changed: null,
+        size_changed: null,
+        baseline_width: null,
+        baseline_height: null,
+        current_width: null,
+        current_height: null,
+        baseline_image_path: null,
+        current_image_path: null,
+        diff_image_path: null,
+        verdict: null,
+        confidence: null,
+        explanation: null,
+        observed_changes: null,
+        judged_by: null,
+        judge_error: null,
+        ignored_regions: null,
+        expected_change_regions: null,
+      });
+    }
+    return runId;
+  });
+
+  return save();
+}
+
+/** Reads one saved run and its page diffs (in insertion order), or null if it doesn't exist. */
+export function loadRun(
+  db: Database.Database,
+  runId: number
+): { run: RunRow; diffs: PageDiffRow[] } | null {
+  const run = db.prepare("SELECT * FROM runs WHERE id = ?").get(runId) as RunRow | undefined;
+  if (!run) return null;
+  const diffs = db
+    .prepare("SELECT * FROM page_diffs WHERE run_id = ? ORDER BY id")
+    .all(runId) as PageDiffRow[];
+  return { run, diffs };
 }
