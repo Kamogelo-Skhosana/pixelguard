@@ -200,7 +200,9 @@ Exit codes: `0` success · `1` changes found with `--fail-on-change`, or a Real 
 - `src/dashboard/app.ts` — `createApp({ db })` builds the Express app; it takes an open database so tests can use an in-memory one
 - `GET /api/health` → `{ status, version, schemaVersion, runs }`
 - `GET /api/runs` (P036) — run history, newest first: `{ runs, total, limit, offset }`. Each run is a camelCase summary (tags, target, status, headline, judge model, page counts, screenshot counts, verdict counts, report/JSON paths) — the frontend never sees SQLite column names. Query parameters: `limit` (1–200, default 50), `offset`, `status` (`pass` / `review` / `fail`) and `target` (exact target URL). Invalid or unknown parameters get a 400 listing the problems
-- `/api/runs/:id`, `/api/runs/trend` — run detail and trend (P037–P038)
+- `GET /api/runs/:id` (P037) — one run: `{ run, pages }`. `run` is the same summary as in the list. `pages` are rebuilt with the same `rollupPages()` the CLI and Markdown report use, so statuses and summaries match exactly; each page lists its screenshots with pixel numbers, sizes, verdict, confidence, explanation, observed changes, regions, skip reason and image URLs. Unknown runs get a 404; ids that aren't positive whole numbers get a 400
+- `GET /api/runs/:id/diffs/:diffId/:kind` (P037) — serves a screenshot's `baseline`, `current` or `diff` PNG. It only serves the file recorded in the database for that exact screenshot of that run (never an arbitrary path), only `.png` files, and returns a clear 404 if the file has since been cleaned up. Stored paths are resolved against the project folder
+- `GET /api/runs/trend` — regression trend (P038)
 - Unknown `/api` routes return a JSON 404; route errors are logged on the server and returned as a generic JSON 500 (no internal details); the `X-Powered-By` header is off
 - A port that's already in use gives a clear error (exit code 2)
 

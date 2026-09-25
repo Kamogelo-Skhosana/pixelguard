@@ -20,9 +20,11 @@ export const PIXELGUARD_VERSION = "0.1.0";
 
 export interface AppOptions {
   db: Database.Database;
+  /** Folder stored image paths are relative to (default: the current folder). */
+  projectDir?: string;
 }
 
-export function createApp({ db }: AppOptions): Express {
+export function createApp({ db, projectDir = process.cwd() }: AppOptions): Express {
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "100kb" }));
@@ -37,7 +39,7 @@ export function createApp({ db }: AppOptions): Express {
     });
   });
 
-  app.use("/api", createApiRouter(db));
+  app.use("/api", createApiRouter(db, { projectDir }));
 
   // Anything else under /api that no route handled.
   app.use("/api", (req, res) => {

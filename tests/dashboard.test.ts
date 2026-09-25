@@ -63,13 +63,9 @@ describe("dashboard API skeleton (P035)", () => {
     expect(r.body).toEqual({ error: "No API endpoint for GET /api/does-not-exist" });
   });
 
-  it.each(["/api/runs/trend", "/api/runs/1"])(
-    "%s is wired up (implemented in P037-P038)",
-    async (path) => {
-      const r = await get(path);
-      expect(r.status).toBe(501);
-    }
-  );
+  it("/api/runs/trend is wired up (implemented in P038)", async () => {
+    expect((await get("/api/runs/trend")).status).toBe(501);
+  });
 
   it("turns route errors into a generic JSON 500 without internal details", async () => {
     const db = getDatabase(":memory:");

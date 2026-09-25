@@ -10,7 +10,9 @@
 import express from "express";
 import type Database from "better-sqlite3";
 import { z } from "zod";
-import { listRuns } from "./queries.js";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { getImagePath, getRunDetail, IMAGE_KINDS, listRuns, type ImageKind } from "./queries.js";
 
 /** Query string for GET /api/runs. */
 const RunListQuery = z
@@ -31,7 +33,17 @@ function describeIssues(error: z.ZodError): string[] {
   );
 }
 
-export function createApiRouter(db: Database.Database): express.Router {
+const PositiveId = z.coerce.number().int().positive();
+
+export interface ApiOptions {
+  /** Folder stored image paths are relative to (the project folder; default: cwd). */
+  projectDir: string;
+}
+
+export function createApiRouter(
+  db: Database.Database,
+  options: ApiOptions = { projectDir: process.cwd() }
+): express.Router {
   const router = express.Router();
 
   // GET /api/runs?limit=50&offset=0&status=fail&target=https://example.com  (P036)
@@ -53,10 +65,46 @@ export function createApiRouter(db: Database.Database): express.Router {
     res.status(501).json({ error: "Not implemented" });
   });
 
-  router.get("/runs/:id", (_req, res) => {
-    // TODO (P037): query page_diffs for the given run id, return
-    // the full verdict list.
-    res.status(501).json({ error: "Not implemented" });
+  // GET /api/runs/:id  (P037) — one run with its pages and screenshots.
+  router.get("/runs/:id", (req, res) => {
+    const id = PositiveId.safeParse(req.params.id);
+    if (!id.success) {
+      res.status(400).json({ error: "Run id must be a positive whole number" });
+      return;
+    }
+    const detail = getRunDetail(db, id.data);
+    if (!detail) {
+      res.status(404).json({ error: `Run ${id.data} not found` });
+      return;
+    }
+    res.json(detail);
+  });
+
+  // GET /api/runs/:id/diffs/:diffId/:kind  (P037) — a screenshot image.
+  // Only serves the files recorded for that exact screenshot in the database,
+  // so arbitrary paths can never be requested.
+  router.get("/runs/:id/diffs/:diffId/:kind", (req, res, next) => {
+    const runId = PositiveId.safeParse(req.params.id);
+    const diffId = PositiveId.safeParse(req.params.diffId);
+    const kind = z.enum(IMAGE_KINDS as [ImageKind, ...ImageKind[]]).safeParse(req.params.kind);
+    if (!runId.success || !diffId.success || !kind.success) {
+      res.status(400).json({ error: "Expected /runs/<id>/diffs/<id>/(baseline|current|diff)" });
+      return;
+    }
+    const stored = getImagePath(db, runId.data, diffId.data, kind.data);
+    if (!stored || !stored.toLowerCase().endsWith(".png")) {
+      res.status(404).json({ error: "No such image" });
+      return;
+    }
+    const file = resolve(options.projectDir, stored);
+    if (!existsSync(file)) {
+      res
+        .status(404)
+        .json({ error: "The image file no longer exists (it may have been cleaned up)" });
+      return;
+    }
+    res.type("png").set("Cache-Control", "no-cache");
+    res.sendFile(file, (err) => err && next(err));
   });
 
   return router;
