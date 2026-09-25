@@ -13,7 +13,8 @@ import { z } from "zod";
 import { existsSync } from "node:fs";
 import { readManifest } from "../capture/storage.js";
 import type { RunRow } from "../report/persistence.js";
-import { acceptAsBaseline, AcceptError } from "./baselineManager.js";
+import { acceptAsBaseline, AcceptError, restoreBaseline } from "./baselineManager.js";
+import { getBaselineHistory, readVersionManifest, versionDir } from "./baselineHistory.js";
 import { resolve } from "node:path";
 import {
   getImagePath,
@@ -61,6 +62,10 @@ function describeIssues(error: z.ZodError): string[] {
 }
 
 const PositiveId = z.coerce.number().int().positive();
+const TagParam = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9._-]{0,49}$/i)
+  .refine((t) => !t.includes(".."));
 
 export interface ApiOptions {
   /** Folder stored image paths are relative to (the project folder; default: cwd). */
@@ -202,6 +207,127 @@ export function createApiRouter(
         force: body.data.force,
       });
       res.json({ accepted });
+    } catch (err) {
+      if (err instanceof AcceptError) {
+        res.status(409).json({ error: err.message });
+        return;
+      }
+      next(err);
+    }
+  });
+
+  // GET /api/baselines/:tag/history  (P045) — baseline versions, newest first.
+  router.get("/baselines/:tag/history", async (req, res, next) => {
+    try {
+      const tag = TagParam.safeParse(req.params.tag);
+      if (!tag.success) {
+        res.status(400).json({ error: "Invalid tag" });
+        return;
+      }
+      res.json(await getBaselineHistory(options.outputDir, tag.data));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /api/baselines/:tag/versions/:version  (P045) — pages and screenshots of one version.
+  router.get("/baselines/:tag/versions/:version", async (req, res, next) => {
+    try {
+      const tag = TagParam.safeParse(req.params.tag);
+      const version = PositiveId.safeParse(req.params.version);
+      if (!tag.success || !version.success) {
+        res.status(400).json({ error: "Expected /baselines/<tag>/versions/<number>" });
+        return;
+      }
+      const manifest = await readVersionManifest(options.outputDir, tag.data, version.data);
+      if (!manifest) {
+        res.status(404).json({ error: `Version ${version.data} of "${tag.data}" isn't available` });
+        return;
+      }
+      res.json({
+        tag: tag.data,
+        version: version.data,
+        capturedAt: manifest.capturedAt,
+        baseUrl: manifest.baseUrl,
+        promotedFrom: manifest.promotedFrom ?? null,
+        pages: manifest.pages.map((p) => ({
+          page: p.page,
+          name: p.name,
+          screenshots: p.screenshots
+            .filter((s) => s.ok)
+            .map((s) => ({
+              viewport: s.viewport,
+              image: `/api/baselines/${tag.data}/versions/${version.data}/images/${encodeURIComponent(s.viewport)}/${encodeURIComponent(p.name)}`,
+            })),
+        })),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /api/baselines/:tag/versions/:version/images/:viewport/:page  (P045)
+  // Served only if that page/viewport is listed in that version's manifest.
+  router.get("/baselines/:tag/versions/:version/images/:viewport/:page", async (req, res, next) => {
+    try {
+      const tag = TagParam.safeParse(req.params.tag);
+      const version = PositiveId.safeParse(req.params.version);
+      if (!tag.success || !version.success) {
+        res.status(400).json({ error: "Invalid tag or version" });
+        return;
+      }
+      const manifest = await readVersionManifest(options.outputDir, tag.data, version.data);
+      const shot = manifest?.pages
+        .find((p) => p.name === req.params.page)
+        ?.screenshots.find((s) => s.ok && s.viewport === req.params.viewport);
+      if (!manifest || !shot || !shot.ok) {
+        res.status(404).json({ error: "No such image" });
+        return;
+      }
+      const history = await getBaselineHistory(options.outputDir, tag.data);
+      const folder =
+        history.currentVersion === version.data
+          ? resolve(options.outputDir, tag.data)
+          : resolve(versionDir(options.outputDir, tag.data, version.data));
+      const file = resolve(folder, shot.file);
+      if (!file.startsWith(folder) || !existsSync(file)) {
+        res.status(404).json({ error: "No such image" });
+        return;
+      }
+      res.type("png").set("Cache-Control", "no-cache");
+      res.sendFile(file, (err) => err && next(err));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /api/baselines/:tag/restore  { "version": 3 }  (P045) — same protections as accept.
+  router.post("/baselines/:tag/restore", async (req, res, next) => {
+    try {
+      if (!req.is("application/json")) {
+        res.status(415).json({ error: "Send a JSON body (Content-Type: application/json)" });
+        return;
+      }
+      if (!sameOrigin(req)) {
+        res
+          .status(403)
+          .json({ error: "Restoring a baseline is only allowed from the dashboard itself" });
+        return;
+      }
+      const tag = TagParam.safeParse(req.params.tag);
+      const body = z.object({ version: z.number().int().positive() }).strict().safeParse(req.body);
+      if (!tag.success || !body.success) {
+        res.status(400).json({ error: 'Expected a JSON body like { "version": 3 }' });
+        return;
+      }
+      const restored = await restoreBaseline({
+        outputDir: options.outputDir,
+        tag: tag.data,
+        version: body.data.version,
+      });
+      res.json({
+        restored: { tag: tag.data, fromVersion: body.data.version, version: restored.version },
+      });
     } catch (err) {
       if (err instanceof AcceptError) {
         res.status(409).json({ error: err.message });

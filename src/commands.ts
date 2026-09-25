@@ -37,7 +37,11 @@ import { exportJson } from "./report/jsonExport.js";
 import { generateMarkdownReport, writeReport } from "./report/markdown.js";
 import { getDatabase, saveRun } from "./report/persistence.js";
 import { startDashboard, type RunningDashboard } from "./dashboard/server.js";
-import { acceptAsBaseline } from "./dashboard/baselineManager.js";
+import {
+  acceptAsBaseline,
+  getBaselineHistory,
+  restoreBaseline,
+} from "./dashboard/baselineManager.js";
 
 export const EXIT_OK = 0;
 export const EXIT_CHANGES = 1;
@@ -423,6 +427,64 @@ export async function runAccept(
     return EXIT_OK;
   } catch (err) {
     io.err(`Accept failed: ${(err as Error).message}`);
+    io.err("The baseline was not changed.");
+    return EXIT_ERROR;
+  }
+}
+
+/** `pixelguard baseline history`: lists baseline versions, newest first (P045). */
+export async function runBaselineHistory(
+  settings: Settings,
+  options: { tag?: string },
+  io: CommandIO
+): Promise<number> {
+  try {
+    const history = await getBaselineHistory(settings.outputDir, options.tag ?? "baseline");
+    if (history.versions.length === 0) {
+      io.out(
+        `"${history.tag}" has no history yet — versions are recorded each time you accept a baseline.`
+      );
+      return EXIT_OK;
+    }
+    io.out(`History of "${history.tag}" (newest first):`);
+    for (const v of history.versions) {
+      const how =
+        v.source.type === "restore"
+          ? `restored from version ${v.source.fromVersion}`
+          : v.version === 1 && v.source.screenshots === 0
+            ? "original baseline"
+            : `accepted from "${v.source.fromTag}"${
+                v.source.pages ? ` (pages: ${v.source.pages.join(", ")})` : ""
+              }`;
+      const state = v.current ? "current" : v.archived ? "archived" : "no longer archived";
+      io.out(`  v${v.version}  ${v.createdAt}  ${how}  [${state}]`);
+    }
+    return EXIT_OK;
+  } catch (err) {
+    io.err(`Couldn't read the baseline history: ${(err as Error).message}`);
+    return EXIT_ERROR;
+  }
+}
+
+/** `pixelguard baseline restore <version>`: makes an archived version the baseline again (P045). */
+export async function runBaselineRestore(
+  settings: Settings,
+  options: { tag?: string; version: number },
+  io: CommandIO
+): Promise<number> {
+  try {
+    const { version } = await restoreBaseline({
+      outputDir: settings.outputDir,
+      tag: options.tag,
+      version: options.version,
+    });
+    io.out(
+      `Restored version ${options.version} of "${options.tag ?? "baseline"}" (recorded as version ${version}; ` +
+        `the replaced baseline was archived and can be restored too).`
+    );
+    return EXIT_OK;
+  } catch (err) {
+    io.err(`Restore failed: ${(err as Error).message}`);
     io.err("The baseline was not changed.");
     return EXIT_ERROR;
   }

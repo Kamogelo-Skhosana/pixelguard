@@ -45,7 +45,12 @@ npm run pixelguard -- accept --from current                    # whole capture
 npm run pixelguard -- accept --from current --pages /pricing   # just some pages
 ```
 
-The baseline is swapped in safely (never half-replaced), and a capture with failed screenshots is refused unless you add `--force`.
+The baseline is swapped in safely (never half-replaced), and a capture with failed screenshots is refused unless you add `--force`. Old baselines are archived, so you can look back or roll back:
+
+```bash
+npm run pixelguard -- baseline history      # every version, newest first
+npm run pixelguard -- baseline restore 3    # bring version 3 back
+```
 
 ## Try the Demo
 

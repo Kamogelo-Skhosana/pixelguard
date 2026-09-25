@@ -7,12 +7,16 @@
  * swapped in at the end, so a failure part-way never leaves a
  * half-replaced baseline.
  *
+ * Replaced baselines are archived, not deleted, and can be reviewed or
+ * restored — see baselineHistory.ts (P045).
+ *
  * Tickets: P044, P045
  */
 
 import { cp, mkdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { pageName } from "../capture/pages.js";
+import { getBaselineHistory, recordNewVersion, versionDir } from "./baselineHistory.js";
 import {
   readManifest,
   tagDir,
@@ -38,6 +42,8 @@ export interface AcceptOptions {
   force?: boolean;
   /** When the promotion happened (default: now). */
   now?: Date;
+  /** How many old baseline versions to keep archived (default 20) (P045). */
+  keepVersions?: number;
 }
 
 export interface AcceptResult {
@@ -49,6 +55,8 @@ export interface AcceptResult {
   screenshots: number;
   /** True when the whole baseline was replaced, false for a page-by-page accept. */
   wholeCapture: boolean;
+  /** The baseline version this created (P045). */
+  version: number;
 }
 
 /** Thrown when an accept is refused (bad input, failed screenshots...). Nothing is changed. */
@@ -98,7 +106,8 @@ export async function acceptAsBaseline(options: AcceptOptions): Promise<AcceptRe
   });
   const fromDir = tagDir(options.outputDir, fromTag);
   const toDir = tagDir(options.outputDir, toTag);
-  const at = (options.now ?? new Date()).toISOString();
+  const now = options.now ?? new Date();
+  const at = now.toISOString();
 
   // Which pages to accept.
   let chosen: ManifestPage[];
@@ -177,18 +186,24 @@ export async function acceptAsBaseline(options: AcceptOptions): Promise<AcceptRe
     }
 
     await writeManifest(tempDir, manifest);
-    // Swap: old baseline aside, new one in, then remove the old one.
-    const hadBaseline = await rename(toDir, oldDir).then(
-      () => true,
-      () => false
-    );
-    try {
-      await rename(tempDir, toDir);
-    } catch (err) {
-      if (hadBaseline) await rename(oldDir, toDir); // put the old baseline back
-      throw err;
-    }
-    await rm(oldDir, { recursive: true, force: true });
+    const previous = await readManifest(options.outputDir, toTag).catch(() => null);
+    const hadBaseline = await swapIn(tempDir, toDir, oldDir);
+
+    // Archive the old baseline instead of deleting it (P045).
+    const version = await recordNewVersion({
+      outputDir: options.outputDir,
+      tag: toTag,
+      previousDir: hadBaseline ? oldDir : null,
+      previousCreatedAt: previous?.promotedFrom?.at ?? previous?.capturedAt,
+      source: {
+        type: "accept",
+        fromTag,
+        pages: wholeCapture ? null : accepted.map((p) => p.name),
+        screenshots,
+      },
+      at: now,
+      keep: options.keepVersions,
+    });
 
     return {
       fromTag,
@@ -196,13 +211,85 @@ export async function acceptAsBaseline(options: AcceptOptions): Promise<AcceptRe
       pages: accepted.map((p) => p.name),
       screenshots,
       wholeCapture,
+      version: version.version,
     };
   } finally {
     await rm(tempDir, { recursive: true, force: true });
+    await rm(oldDir, { recursive: true, force: true }); // only left if archiving failed
   }
 }
 
-export async function getBaselineHistory(): Promise<unknown[]> {
-  // TODO (P045): return a list of past baseline promotions with dates.
-  throw new Error("Not implemented");
+/**
+ * Moves the current baseline (if any) aside to oldDir and the new one from
+ * tempDir into place, putting the old one back if that fails.
+ * Returns whether there was an old baseline.
+ */
+async function swapIn(tempDir: string, toDir: string, oldDir: string): Promise<boolean> {
+  const hadBaseline = await rename(toDir, oldDir).then(
+    () => true,
+    () => false
+  );
+  try {
+    await rename(tempDir, toDir);
+  } catch (err) {
+    if (hadBaseline) await rename(oldDir, toDir);
+    throw err;
+  }
+  return hadBaseline;
 }
+
+export interface RestoreOptions {
+  outputDir: string;
+  tag?: string;
+  /** The archived version to bring back. */
+  version: number;
+  now?: Date;
+  keepVersions?: number;
+}
+
+/**
+ * Makes an archived baseline version the live baseline again. The baseline
+ * being replaced is archived as usual, and the restore is recorded as a new
+ * version, so a restore can itself be undone.
+ */
+export async function restoreBaseline(options: RestoreOptions): Promise<{ version: number }> {
+  const tag = validateTag(options.tag ?? "baseline");
+  const history = await getBaselineHistory(options.outputDir, tag);
+  const target = history.versions.find((v) => v.version === options.version);
+  if (!target) {
+    throw new AcceptError(`There's no version ${options.version} of "${tag}".`);
+  }
+  if (target.current) {
+    throw new AcceptError(`Version ${options.version} is already the current "${tag}".`);
+  }
+  if (!target.archived) {
+    throw new AcceptError(
+      `Version ${options.version} of "${tag}" is no longer archived (only the newest versions are kept).`
+    );
+  }
+
+  const now = options.now ?? new Date();
+  const stamp = `${process.pid}-${Date.now()}`;
+  const tempDir = join(options.outputDir, `.tmp-restore-${tag}-${stamp}`);
+  const oldDir = join(options.outputDir, `.old-${tag}-${stamp}`);
+  try {
+    await cp(versionDir(options.outputDir, tag, options.version), tempDir, { recursive: true });
+    const manifest = await readManifest(options.outputDir, tag).catch(() => null);
+    const hadBaseline = await swapIn(tempDir, tagDir(options.outputDir, tag), oldDir);
+    const version = await recordNewVersion({
+      outputDir: options.outputDir,
+      tag,
+      previousDir: hadBaseline ? oldDir : null,
+      previousCreatedAt: manifest?.capturedAt,
+      source: { type: "restore", fromVersion: options.version },
+      at: now,
+      keep: options.keepVersions,
+    });
+    return { version: version.version };
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+    await rm(oldDir, { recursive: true, force: true });
+  }
+}
+
+export { getBaselineHistory } from "./baselineHistory.js";

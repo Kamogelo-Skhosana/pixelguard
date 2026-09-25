@@ -220,6 +220,22 @@ pixelguard accept --from current --pages /pricing     # only some pages; the res
 - Refuses — without changing anything — a capture with failed screenshots (unless `--force`, which leaves those out), unknown pages, a tag accepted as itself, or a page accept when there's no baseline yet
 - Dashboard: `POST /api/runs/:id/accept` with `{ "pages"?: [...], "force"?: bool }` accepts that run's current capture into its baseline tag. Because it changes files, it only accepts JSON (so a plain HTML form on another site can't submit it) from the dashboard's own origin (`Origin` / `Sec-Fetch-Site` checked), and it refuses with a 409 if the current tag was re-captured after that run — so you can never accept screenshots you weren't shown
 
+## Baseline history (P045)
+
+Replaced baselines are archived, not deleted, so they can be reviewed or restored:
+
+```
+screenshots/_history/baseline/history.json   every version: when, and how it was made
+screenshots/_history/baseline/v1/            the baseline as it was at version 1
+screenshots/_history/baseline/v2/            ...
+```
+
+- Version 1 is the original captured baseline; every accept or restore creates the next version. The live baseline is always the latest version and stays in `screenshots/baseline/`
+- `pixelguard baseline history` lists versions (newest first) with how each was made; `pixelguard baseline restore <version>` brings one back. A restore archives the baseline it replaces and is recorded as a new version, so it can be undone too
+- Only the newest 20 archives are kept (`keepVersions`); older entries stay in the history list, marked as no longer archived
+- `_history` can't be a tag name, so it never shows up as a capture
+- API: `GET /api/baselines/:tag/history`, `GET /api/baselines/:tag/versions/:version` (pages and image URLs), `GET /api/baselines/:tag/versions/:version/images/:viewport/:page` (only images listed in that version's manifest), and `POST /api/baselines/:tag/restore` `{ "version": n }` (JSON and same-origin only, like accept)
+
 ## Data Flow (end-to-end)
 
 1. User runs `pixelguard capture --tag current`

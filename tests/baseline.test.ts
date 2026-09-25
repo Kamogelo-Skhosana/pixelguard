@@ -110,6 +110,7 @@ describe("acceptAsBaseline (P044)", () => {
       pages: ["home", "pricing"],
       screenshots: 4,
       wholeCapture: true,
+      version: 2,
     });
     const m = await readManifest(out, "baseline");
     expect(m.tag).toBe("baseline");
@@ -127,7 +128,7 @@ describe("acceptAsBaseline (P044)", () => {
   it("leaves the source capture untouched and no temp folders behind", async () => {
     await acceptAsBaseline({ outputDir: out, fromTag: "current" });
     expect(fixtureOf("current", "desktop/home.png")).toBe("button-colour");
-    expect((await readdir(out)).sort()).toEqual(["baseline", "current"]);
+    expect((await readdir(out)).sort()).toEqual(["_history", "baseline", "current"]);
   });
 
   it("creates the baseline if there isn't one yet", async () => {

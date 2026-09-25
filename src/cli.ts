@@ -5,6 +5,8 @@
  * Usage:
  *   pixelguard capture --tag <name>
  *   pixelguard accept --from <tag> [--to baseline] [--pages home,pricing] [--force]
+ *   pixelguard baseline history [--tag baseline]
+ *   pixelguard baseline restore <version> [--tag baseline]
  *   pixelguard dashboard [--port 8100] [--host 127.0.0.1]
  *   pixelguard diff --baseline <tag> --current <tag> [--output diffs.json]
  *                   [--threshold 0.1] [--fail-on-change]
@@ -25,6 +27,8 @@ import {
   EXIT_ERROR,
   runCapture,
   runAccept,
+  runBaselineHistory,
+  runBaselineRestore,
   runDashboard,
   runDiff,
   type CommandIO,
@@ -45,6 +49,14 @@ function parsePort(value: string): number {
   const n = Number(value);
   if (!/^\d+$/.test(value.trim()) || n > 65535) {
     throw new InvalidArgumentError("must be a whole number from 0 to 65535.");
+  }
+  return n;
+}
+
+function parseVersion(value: string): number {
+  const n = Number(value.replace(/^v/i, ""));
+  if (!Number.isInteger(n) || n < 1) {
+    throw new InvalidArgumentError("must be a version number like 3 or v3.");
   }
   return n;
 }
@@ -156,6 +168,23 @@ export function createProgram(deps: ProgramDeps = {}): Command {
     .option("--force", "Accept even if some screenshots failed (they're left out)")
     .action((opts: { from: string; to?: string; pages?: string; force?: boolean }) =>
       withSettings((s) => runAccept(s, opts, io))
+    );
+
+  const baseline = program
+    .command("baseline")
+    .description("Review or restore earlier versions of the baseline");
+  baseline
+    .command("history")
+    .description("List baseline versions, newest first")
+    .option("--tag <tag>", "Baseline tag (default: baseline)")
+    .action((opts: { tag?: string }) => withSettings((s) => runBaselineHistory(s, opts, io)));
+  baseline
+    .command("restore")
+    .description("Make an archived version the baseline again")
+    .argument("<version>", "Version number from 'baseline history'", parseVersion)
+    .option("--tag <tag>", "Baseline tag (default: baseline)")
+    .action((version: number, opts: { tag?: string }) =>
+      withSettings((s) => runBaselineRestore(s, { ...opts, version }, io))
     );
 
   program
