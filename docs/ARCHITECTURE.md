@@ -199,7 +199,8 @@ Exit codes: `0` success · `1` changes found with `--fail-on-change`, or a Real 
 - Start it with `npm run pixelguard -- dashboard` (or `npm run dev:dashboard`); `--port` / `--host` override `DASHBOARD_PORT` (default `8100`) and `DASHBOARD_HOST` (default `127.0.0.1`, so only this computer can reach it — use `0.0.0.0` in Docker or to share it on your network). Ctrl+C stops it cleanly
 - `src/dashboard/app.ts` — `createApp({ db })` builds the Express app; it takes an open database so tests can use an in-memory one
 - `GET /api/health` → `{ status, version, schemaVersion, runs }`
-- `/api/runs`, `/api/runs/:id`, `/api/runs/trend` — run history (P036–P038)
+- `GET /api/runs` (P036) — run history, newest first: `{ runs, total, limit, offset }`. Each run is a camelCase summary (tags, target, status, headline, judge model, page counts, screenshot counts, verdict counts, report/JSON paths) — the frontend never sees SQLite column names. Query parameters: `limit` (1–200, default 50), `offset`, `status` (`pass` / `review` / `fail`) and `target` (exact target URL). Invalid or unknown parameters get a 400 listing the problems
+- `/api/runs/:id`, `/api/runs/trend` — run detail and trend (P037–P038)
 - Unknown `/api` routes return a JSON 404; route errors are logged on the server and returned as a generic JSON 500 (no internal details); the `X-Powered-By` header is off
 - A port that's already in use gives a clear error (exit code 2)
 
