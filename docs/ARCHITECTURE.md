@@ -206,6 +206,20 @@ Exit codes: `0` success · `1` changes found with `--fail-on-change`, or a Real 
 - Unknown `/api` routes return a JSON 404; route errors are logged on the server and returned as a generic JSON 500 (no internal details); the `X-Powered-By` header is off
 - A port that's already in use gives a clear error (exit code 2)
 
+## Baseline management (P044)
+
+When a change is intentional, accept it so future runs compare against it:
+
+```bash
+pixelguard accept --from current                      # the whole capture becomes the baseline
+pixelguard accept --from current --pages /pricing     # only some pages; the rest of the baseline is kept
+```
+
+- `acceptAsBaseline()` (`src/dashboard/baselineManager.ts`) builds the new baseline in a temporary folder and swaps it in at the end, so a failure never leaves a half-replaced baseline (the old one is put back). The accepted manifest records `promotedFrom` (tag, time, and pages for a partial accept)
+- A whole accept also drops baseline pages that aren't in the capture; a page accept replaces just those pages' files (and adds pages the baseline didn't have)
+- Refuses — without changing anything — a capture with failed screenshots (unless `--force`, which leaves those out), unknown pages, a tag accepted as itself, or a page accept when there's no baseline yet
+- Dashboard: `POST /api/runs/:id/accept` with `{ "pages"?: [...], "force"?: bool }` accepts that run's current capture into its baseline tag. Because it changes files, it only accepts JSON (so a plain HTML form on another site can't submit it) from the dashboard's own origin (`Origin` / `Sec-Fetch-Site` checked), and it refuses with a 409 if the current tag was re-captured after that run — so you can never accept screenshots you weren't shown
+
 ## Data Flow (end-to-end)
 
 1. User runs `pixelguard capture --tag current`

@@ -13,6 +13,8 @@ import { createApp } from "./app.js";
 
 export interface DashboardOptions {
   databasePath: string;
+  /** Root screenshots folder (Settings.outputDir). */
+  outputDir: string;
   host: string;
   /** 0 picks a free port (used by tests). */
   port: number;
@@ -27,7 +29,7 @@ export interface RunningDashboard {
 
 export async function startDashboard(options: DashboardOptions): Promise<RunningDashboard> {
   const db = getDatabase(options.databasePath);
-  const app = createApp({ db });
+  const app = createApp({ db, outputDir: options.outputDir });
 
   let server: Server;
   try {

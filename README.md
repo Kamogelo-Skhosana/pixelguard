@@ -36,6 +36,17 @@ Every `pixelguard diff` run is saved to `pixelguard.db`. Start the dashboard wit
 npm run pixelguard -- dashboard        # http://127.0.0.1:8100
 ```
 
+## Accepting Intentional Changes
+
+When a diff shows a change you meant to make, make it the new baseline:
+
+```bash
+npm run pixelguard -- accept --from current                    # whole capture
+npm run pixelguard -- accept --from current --pages /pricing   # just some pages
+```
+
+The baseline is swapped in safely (never half-replaced), and a capture with failed screenshots is refused unless you add `--force`.
+
 ## Try the Demo
 
 A small demo shop is bundled in [`examples/demo-site/`](examples/demo-site/). One command runs the whole pipeline against it:

@@ -24,9 +24,16 @@ export interface AppOptions {
   projectDir?: string;
   /** Current time, for the trend window (tests pass a fixed date). */
   now?: () => Date;
+  /** Root screenshots folder, for accepting baselines (default: "screenshots"). */
+  outputDir?: string;
 }
 
-export function createApp({ db, projectDir = process.cwd(), now }: AppOptions): Express {
+export function createApp({
+  db,
+  projectDir = process.cwd(),
+  now,
+  outputDir = "screenshots",
+}: AppOptions): Express {
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "100kb" }));
@@ -41,7 +48,7 @@ export function createApp({ db, projectDir = process.cwd(), now }: AppOptions): 
     });
   });
 
-  app.use("/api", createApiRouter(db, { projectDir, now }));
+  app.use("/api", createApiRouter(db, { projectDir, now, outputDir }));
 
   // Anything else under /api that no route handled.
   app.use("/api", (req, res) => {

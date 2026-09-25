@@ -11,6 +11,9 @@ import express from "express";
 import type Database from "better-sqlite3";
 import { z } from "zod";
 import { existsSync } from "node:fs";
+import { readManifest } from "../capture/storage.js";
+import type { RunRow } from "../report/persistence.js";
+import { acceptAsBaseline, AcceptError } from "./baselineManager.js";
 import { resolve } from "node:path";
 import {
   getImagePath,
@@ -40,6 +43,14 @@ const TrendQuery = z
   })
   .strict();
 
+/** Body for POST /api/runs/:id/accept. */
+const AcceptBody = z
+  .object({
+    pages: z.array(z.string().trim().min(1)).min(1).max(500).optional(),
+    force: z.boolean().optional(),
+  })
+  .strict();
+
 /** Turns zod issues into short "field: problem" strings for 400 responses. */
 function describeIssues(error: z.ZodError): string[] {
   return error.issues.map((i) =>
@@ -56,11 +67,13 @@ export interface ApiOptions {
   projectDir: string;
   /** Current time, for the trend window (tests pass a fixed date). */
   now?: () => Date;
+  /** Root screenshots folder (Settings.outputDir), for accepting baselines. */
+  outputDir: string;
 }
 
 export function createApiRouter(
   db: Database.Database,
-  options: ApiOptions = { projectDir: process.cwd() }
+  options: ApiOptions = { projectDir: process.cwd(), outputDir: "screenshots" }
 ): express.Router {
   const router = express.Router();
 
@@ -130,5 +143,89 @@ export function createApiRouter(
     res.sendFile(file, (err) => err && next(err));
   });
 
+  // POST /api/runs/:id/accept  { "pages"?: ["pricing"] }  (P044)
+  // Promotes the run's current capture to be the new baseline. This changes
+  // files on disk, so it only accepts JSON from the dashboard's own origin
+  // (a form or script on another website can't trigger it).
+  router.post("/runs/:id/accept", async (req, res, next) => {
+    try {
+      if (!req.is("application/json")) {
+        res.status(415).json({ error: "Send a JSON body (Content-Type: application/json)" });
+        return;
+      }
+      if (!sameOrigin(req)) {
+        res
+          .status(403)
+          .json({ error: "Accepting a baseline is only allowed from the dashboard itself" });
+        return;
+      }
+      const id = PositiveId.safeParse(req.params.id);
+      if (!id.success) {
+        res.status(400).json({ error: "Run id must be a positive whole number" });
+        return;
+      }
+      const body = AcceptBody.safeParse(req.body ?? {});
+      if (!body.success) {
+        res.status(400).json({ error: "Invalid body", issues: describeIssues(body.error) });
+        return;
+      }
+
+      const run = db.prepare("SELECT * FROM runs WHERE id = ?").get(id.data) as RunRow | undefined;
+      if (!run) {
+        res.status(404).json({ error: `Run ${id.data} not found` });
+        return;
+      }
+
+      // Refuse if the current tag was re-captured after this run: accepting
+      // would promote screenshots the user never saw in this run.
+      const current = await readManifest(options.outputDir, run.current_tag).catch(() => null);
+      if (!current) {
+        res.status(409).json({
+          error: `The "${run.current_tag}" capture from this run no longer exists, so it can't be accepted.`,
+        });
+        return;
+      }
+      if (current.capturedAt > run.created_at) {
+        res.status(409).json({
+          error:
+            `"${run.current_tag}" has been re-captured since run ${run.id}, so its screenshots are ` +
+            `no longer the ones shown here. Run pixelguard diff again, then accept the new run.`,
+        });
+        return;
+      }
+
+      const accepted = await acceptAsBaseline({
+        outputDir: options.outputDir,
+        fromTag: run.current_tag,
+        toTag: run.baseline_tag,
+        pages: body.data.pages,
+        force: body.data.force,
+      });
+      res.json({ accepted });
+    } catch (err) {
+      if (err instanceof AcceptError) {
+        res.status(409).json({ error: err.message });
+        return;
+      }
+      next(err);
+    }
+  });
+
   return router;
+}
+
+/**
+ * True when the request comes from the dashboard's own page. Browsers send
+ * Origin (and Sec-Fetch-Site) on cross-site POSTs; requests without them
+ * (curl, scripts on this machine) are allowed.
+ */
+function sameOrigin(req: express.Request): boolean {
+  if (req.get("sec-fetch-site") === "cross-site") return false;
+  const origin = req.get("origin");
+  if (!origin) return true;
+  try {
+    return new URL(origin).host === req.get("host");
+  } catch {
+    return false;
+  }
 }

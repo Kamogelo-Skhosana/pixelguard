@@ -68,6 +68,11 @@ export interface CaptureManifest {
   tag: string;
   capturedAt: string;
   baseUrl: string;
+  /**
+   * Set when this tag was created by accepting another capture as the
+   * baseline (P044): which tag it came from, when, and which pages.
+   */
+  promotedFrom?: { tag: string; at: string; pages?: string[] };
   viewports: { name: string; width: number; height: number }[];
   pages: ManifestPage[];
 }

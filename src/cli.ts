@@ -4,6 +4,7 @@
  *
  * Usage:
  *   pixelguard capture --tag <name>
+ *   pixelguard accept --from <tag> [--to baseline] [--pages home,pricing] [--force]
  *   pixelguard dashboard [--port 8100] [--host 127.0.0.1]
  *   pixelguard diff --baseline <tag> --current <tag> [--output diffs.json]
  *                   [--threshold 0.1] [--fail-on-change]
@@ -23,6 +24,7 @@ import {
   consoleIO,
   EXIT_ERROR,
   runCapture,
+  runAccept,
   runDashboard,
   runDiff,
   type CommandIO,
@@ -143,6 +145,17 @@ export function createProgram(deps: ProgramDeps = {}): Command {
           runDiff(s, opts, io, { createLLM: deps.createLLM, now: deps.now })
         );
       }
+    );
+
+  program
+    .command("accept")
+    .description("Accept a capture (or some of its pages) as the new baseline")
+    .requiredOption("--from <tag>", "Capture to promote, e.g. current")
+    .option("--to <tag>", "Tag to replace (default: baseline)")
+    .option("--pages <list>", "Only these pages, comma-separated (e.g. /,/pricing or home,pricing)")
+    .option("--force", "Accept even if some screenshots failed (they're left out)")
+    .action((opts: { from: string; to?: string; pages?: string; force?: boolean }) =>
+      withSettings((s) => runAccept(s, opts, io))
     );
 
   program

@@ -107,7 +107,7 @@ Suggested labels: `phase-1`, `phase-2`, `phase-3`, plus an epic label per group 
 
 ### Epic: Baseline Management
 
-- [ ] **P044** — Implement "accept as new baseline" action (promote current screenshots to baseline)
+- [x] **P044** — Implement "accept as new baseline" action (promote current screenshots to baseline)
 - [ ] **P045** — Add baseline versioning/history so accepted baselines can be reviewed later
 
 ### Epic: Deployment

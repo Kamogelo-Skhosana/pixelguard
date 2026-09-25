@@ -1,5 +1,5 @@
 /**
- * Implementation of the `pixelguard capture`, `diff` and `dashboard` commands.
+ * Implementation of the `pixelguard capture`, `diff`, `accept` and `dashboard` commands.
  *
  * Kept separate from cli.ts (argument parsing) so the commands can be tested
  * directly. Each returns a process exit code:
@@ -37,6 +37,7 @@ import { exportJson } from "./report/jsonExport.js";
 import { generateMarkdownReport, writeReport } from "./report/markdown.js";
 import { getDatabase, saveRun } from "./report/persistence.js";
 import { startDashboard, type RunningDashboard } from "./dashboard/server.js";
+import { acceptAsBaseline } from "./dashboard/baselineManager.js";
 
 export const EXIT_OK = 0;
 export const EXIT_CHANGES = 1;
@@ -375,6 +376,7 @@ export async function runDashboard(
   try {
     dashboard = await startDashboard({
       databasePath: settings.databasePath,
+      outputDir: settings.outputDir,
       host: options.host ?? settings.dashboardHost,
       port: options.port ?? settings.dashboardPort,
     });
@@ -387,4 +389,41 @@ export async function runDashboard(
   io.out(`Reading runs from ${settings.databasePath}. Press Ctrl+C to stop.`);
   await (deps.waitForStop ?? ((d) => waitForSignal(d, io)))(dashboard);
   return EXIT_OK;
+}
+
+export interface AcceptCommandOptions {
+  from: string;
+  to?: string;
+  pages?: string;
+  force?: boolean;
+}
+
+/** `pixelguard accept`: promote a capture (or some of its pages) to the baseline (P044). */
+export async function runAccept(
+  settings: Settings,
+  options: AcceptCommandOptions,
+  io: CommandIO
+): Promise<number> {
+  const pages = options.pages
+    ?.split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  try {
+    const result = await acceptAsBaseline({
+      outputDir: settings.outputDir,
+      fromTag: options.from,
+      toTag: options.to,
+      pages,
+      force: options.force,
+    });
+    const what = result.wholeCapture
+      ? `the whole "${result.fromTag}" capture`
+      : `${result.pages.join(", ")} from "${result.fromTag}"`;
+    io.out(`Accepted ${what} as the new "${result.toTag}" (${result.screenshots} screenshot(s)).`);
+    return EXIT_OK;
+  } catch (err) {
+    io.err(`Accept failed: ${(err as Error).message}`);
+    io.err("The baseline was not changed.");
+    return EXIT_ERROR;
+  }
 }

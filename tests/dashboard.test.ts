@@ -25,6 +25,7 @@ beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), "pixelguard-dash-"));
   dashboard = await startDashboard({
     databasePath: join(dir, "pixelguard.db"),
+    outputDir: join(dir, "screenshots"),
     host: "127.0.0.1",
     port: 0,
   });
@@ -90,7 +91,7 @@ describe("startDashboard", () => {
     const { port } = blocker.address() as AddressInfo;
     try {
       await expect(
-        startDashboard({ databasePath: ":memory:", host: "127.0.0.1", port })
+        startDashboard({ databasePath: ":memory:", outputDir: dir, host: "127.0.0.1", port })
       ).rejects.toThrow(`Port ${port} is already in use`);
     } finally {
       await new Promise((r) => blocker.close(r));
@@ -98,7 +99,12 @@ describe("startDashboard", () => {
   });
 
   it("close() stops the server", async () => {
-    const d = await startDashboard({ databasePath: ":memory:", host: "127.0.0.1", port: 0 });
+    const d = await startDashboard({
+      databasePath: ":memory:",
+      outputDir: dir,
+      host: "127.0.0.1",
+      port: 0,
+    });
     await d.close();
     await expect(fetch(`${d.url}/api/health`)).rejects.toThrow();
   });
