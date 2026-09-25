@@ -1,6 +1,6 @@
 {
   "name": "pixelguard",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "AI-powered visual regression testing agent",
   "license": "MIT",
   "type": "module",

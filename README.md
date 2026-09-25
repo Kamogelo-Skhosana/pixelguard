@@ -377,6 +377,7 @@ pixelguard/
 - [docs/DEMO.md](docs/DEMO.md): presenting pixelguard, step by step
 - [docs/REPORT_TEMPLATE.md](docs/REPORT_TEMPLATE.md): design of the Markdown report
 - [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/TICKETS.md](docs/TICKETS.md): how the project was built, in three phases and 50 tickets
+- [CHANGELOG.md](CHANGELOG.md): what's in each release
 - [CONTRIBUTING.md](CONTRIBUTING.md): workflow and checks (`npm run lint`, `npm run typecheck`, `npm test`)
 
 ## License

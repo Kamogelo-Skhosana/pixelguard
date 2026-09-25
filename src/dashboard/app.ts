@@ -18,7 +18,9 @@ import type Database from "better-sqlite3";
 import { schemaVersion } from "../report/persistence.js";
 import { createApiRouter } from "./api.js";
 
-export const PIXELGUARD_VERSION = "0.1.0";
+// Defined in package.json (P050); re-exported for existing imports.
+import { PIXELGUARD_VERSION } from "../version.js";
+export { PIXELGUARD_VERSION };
 
 export interface AppOptions {
   db: Database.Database;

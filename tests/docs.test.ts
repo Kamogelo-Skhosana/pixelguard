@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DOCS = [
   "README.md",
+  "CHANGELOG.md",
   "CONTRIBUTING.md",
   "examples/README.md",
   "docs/ARCHITECTURE.md",

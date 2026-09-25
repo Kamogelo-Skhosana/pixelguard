@@ -37,6 +37,7 @@ import {
 } from "./commands.js";
 import { ConfigError, loadSettings, type Settings } from "./config.js";
 import { shouldUseColour } from "./report/console.js";
+import { PIXELGUARD_VERSION } from "./version.js";
 
 export interface ProgramDeps extends DiffCommandDeps, DashboardCommandDeps {
   io?: CommandIO;
@@ -95,7 +96,7 @@ export function createProgram(deps: ProgramDeps = {}): Command {
   program
     .name("pixelguard")
     .description("AI-powered visual regression testing agent")
-    .version("0.1.0")
+    .version(PIXELGUARD_VERSION)
     // Throw instead of exiting on bad arguments, so they get exit code 2
     // (commander's default of 1 would look like "changes found").
     // Set before adding subcommands so they inherit it.
