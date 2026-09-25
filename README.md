@@ -40,6 +40,8 @@ Open it in your browser to see every run — newest first, filterable by status 
 
 The **Trend** tab charts regressions over time — failing and needs-review pages per day, week or run, with real bugs marked — so you can see whether things are getting better or worse.
 
+The dashboard has light and dark themes. It follows your system setting, and the button in the top bar switches between auto, light and dark.
+
 ## Accepting Intentional Changes
 
 When a diff shows a change you meant to make, make it the new baseline:

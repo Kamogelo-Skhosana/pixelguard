@@ -64,8 +64,16 @@ function row(run) {
       ),
       h("div", { class: "muted small" }, formatDate(run.createdAt))
     ),
-    h("td", { title: run.targetUrl ?? "" }, shortTarget(run.targetUrl)),
-    h("td", { class: "mono small" }, `${run.baselineTag} → ${run.currentTag}`),
+    h(
+      "td",
+      {},
+      h("div", { class: "target", title: run.targetUrl ?? "" }, shortTarget(run.targetUrl)),
+      h(
+        "div",
+        { class: "muted small mono", title: "Baseline tag → current tag" },
+        `${run.baselineTag} → ${run.currentTag}`
+      )
+    ),
     h("td", {}, statusBadge(run.status)),
     h(
       "td",
@@ -165,16 +173,9 @@ export async function renderRunList(root, params) {
                 h(
                   "tr",
                   {},
-                  ...[
-                    "Run",
-                    "When",
-                    "Target",
-                    "Compared",
-                    "Status",
-                    "Summary",
-                    "Pages",
-                    "Judge",
-                  ].map((t) => h("th", { scope: "col" }, t))
+                  ...["Run", "When", "Target", "Status", "Summary", "Pages", "Judge"].map((t) =>
+                    h("th", { scope: "col" }, t)
+                  )
                 )
               ),
               h("tbody", {}, ...list.runs.map(row))

@@ -3,9 +3,10 @@
 
 /** Status -> label and CSS modifier. */
 export const STATUS = {
-  fail: { label: "FAIL", mark: "✗" },
-  review: { label: "REVIEW", mark: "?" },
-  pass: { label: "PASS", mark: "✓" },
+  // Same words as the run list's status filter.
+  fail: { label: "Failing", mark: "✗" },
+  review: { label: "Needs review", mark: "?" },
+  pass: { label: "Passing", mark: "✓" },
 };
 
 /**

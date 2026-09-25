@@ -43,8 +43,20 @@ async function serve(db: Database.Database): Promise<{ url: string; close: () =>
   await new Promise((r) => server.once("listening", r));
   return {
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
-    close: () => new Promise((r) => server.close(() => r())),
+    close: () => closeServer(server),
   };
+}
+
+/**
+ * Stops a test server without waiting for the browser's keep-alive
+ * connections (the page is still open until afterEach), which could
+ * otherwise hold server.close() open under heavy load.
+ */
+function closeServer(server: Server): Promise<void> {
+  return new Promise((r) => {
+    server.close(() => r());
+    server.closeAllConnections();
+  });
 }
 
 const renders = () => page.evaluate(() => Number(document.body.dataset.renders ?? "0"));
@@ -55,10 +67,12 @@ const renders = () => page.evaluate(() => Number(document.body.dataset.renders ?
  * full load event, and reports page errors and HTML if it ever times out.
  */
 async function open(url: string) {
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15_000 });
+  // Both waits together stay under the 30s test timeout, so a hang is
+  // reported with the details below rather than as a bare timeout.
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 12_000 });
   try {
     await page.waitForFunction(() => Number(document.body.dataset.renders ?? "0") >= 1, undefined, {
-      timeout: 15_000,
+      timeout: 12_000,
     });
   } catch (err) {
     const html = (await page.content()).slice(0, 500);
@@ -144,8 +158,9 @@ describe("run list page (P039)", () => {
     expect(await rowIds()).toEqual(Array.from({ length: 25 }, (_, i) => 30 - i));
 
     const first = page.locator('.run-row[data-run-id="30"]');
-    await expect(first.locator("td").nth(2).textContent()).resolves.toBe("blog.example.com/news");
-    await expect(first.locator(".badge").textContent()).resolves.toBe("✗ FAIL");
+    await expect(first.locator(".target").textContent()).resolves.toBe("blog.example.com/news");
+    await expect(first.locator("td").nth(2).textContent()).resolves.toContain("baseline → current");
+    await expect(first.locator(".badge").textContent()).resolves.toBe("✗ Failing");
     await expect(first.locator(".summary").textContent()).resolves.toContain(
       "1 real bug on 1 page (2 pages checked)"
     );
@@ -345,7 +360,7 @@ describe("run detail page (P040)", () => {
 
   it("shows the run header with its summary and developer note", async () => {
     await open(`${app.url}/#/runs/1`);
-    await expect(page.locator("h1").textContent()).resolves.toBe("Run #1 ✗ FAIL");
+    await expect(page.locator("h1").textContent()).resolves.toBe("Run #1 ✗ Failing");
     await expect(page.locator("#run-headline").textContent()).resolves.toContain(
       "1 real bug on 1 page"
     );
@@ -477,7 +492,7 @@ describe("trend page (P041)", () => {
     await new Promise((r) => server.once("listening", r));
     return {
       url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
-      close: () => new Promise<void>((r) => server.close(() => r())),
+      close: () => closeServer(server),
     };
   }
 
@@ -598,5 +613,79 @@ describe("trend page (P041)", () => {
     );
     expect(await page.locator("#trend-chart").count()).toBe(0);
     expect(pageErrors).toEqual([]);
+  });
+});
+
+describe("theme (P042)", () => {
+  let db: Database.Database;
+  let app: { url: string; close: () => Promise<void> };
+
+  beforeAll(async () => {
+    db = getDatabase(":memory:");
+    app = await serve(db);
+  });
+  afterAll(async () => {
+    await app.close();
+    db.close();
+  });
+
+  const background = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const themeAttr = () => page.evaluate(() => document.documentElement.getAttribute("data-theme"));
+  const toggle = () => page.locator("#theme-toggle");
+
+  it("serves the theme script, favicon and brand mark", async () => {
+    const js = await fetch(`${app.url}/js/theme.js`);
+    expect(js.status).toBe(200);
+    expect(js.headers.get("content-type")).toMatch(/javascript/);
+    const icon = await fetch(`${app.url}/favicon.svg`);
+    expect(icon.headers.get("content-type")).toMatch(/image\/svg\+xml/);
+    await open(`${app.url}/`);
+    expect(await page.locator(".brand .brand-mark").count()).toBe(1);
+    await expect(page.locator(".brand").textContent()).resolves.toContain("pixelguard");
+    expect(pageErrors).toEqual([]);
+  });
+
+  it("follows the system colour scheme by default", async () => {
+    await page.emulateMedia({ colorScheme: "light" });
+    await open(`${app.url}/`);
+    await expect(toggle().textContent()).resolves.toBe("Theme: auto");
+    expect(await themeAttr()).toBeNull();
+    const light = await background();
+    await page.emulateMedia({ colorScheme: "dark" });
+    const dark = await background();
+    expect(light).toBe("rgb(243, 245, 247)");
+    expect(dark).toBe("rgb(18, 23, 30)");
+  });
+
+  it("cycles auto, light, dark and remembers the choice", async () => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await open(`${app.url}/`);
+    await toggle().click();
+    expect(await themeAttr()).toBe("light");
+    await expect(toggle().textContent()).resolves.toBe("Theme: light");
+    expect(await background()).toBe("rgb(243, 245, 247)"); // light wins over the dark system
+    await toggle().click();
+    expect(await themeAttr()).toBe("dark");
+    await expect(toggle().getAttribute("aria-label")).resolves.toBe(
+      "Colour theme: dark. Click to switch to auto."
+    );
+
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    expect(await themeAttr()).toBe("dark"); // remembered
+    expect(await background()).toBe("rgb(18, 23, 30)");
+
+    await toggle().click();
+    expect(await themeAttr()).toBeNull();
+    await expect(toggle().textContent()).resolves.toBe("Theme: auto");
+    expect(await background()).toBe("rgb(243, 245, 247)");
+  });
+
+  it("ignores a corrupted saved theme", async () => {
+    await open(`${app.url}/`);
+    await page.evaluate(() => localStorage.setItem("pixelguard-theme", "neon"));
+    await page.reload({ waitUntil: "domcontentloaded" });
+    expect(await themeAttr()).toBeNull();
+    await expect(toggle().textContent()).resolves.toBe("Theme: auto");
   });
 });
