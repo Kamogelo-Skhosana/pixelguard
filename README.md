@@ -98,6 +98,8 @@ npm run demo
 
 This starts the demo shop and captures it. It then switches the shop to version 2 (the date change plus the layout bug), captures again, diffs, and writes `demo-output/report.md`. With `LLM_API_KEY` set, the judge runs too.
 
+Presenting pixelguard? `npm run demo -- --step --dashboard` pauses at each step and opens the dashboard at the end. `--scripted-judge` rehearses with no internet or API key. [docs/DEMO.md](docs/DEMO.md) has a full walkthrough with a talk track and answers to common questions.
+
 ## The AI judge
 
 Add your Anthropic API key to `.env` and pass `--judge`:
@@ -372,6 +374,7 @@ pixelguard/
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how each layer works, in detail
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): running and sharing the dashboard
+- [docs/DEMO.md](docs/DEMO.md): presenting pixelguard, step by step
 - [docs/REPORT_TEMPLATE.md](docs/REPORT_TEMPLATE.md): design of the Markdown report
 - [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/TICKETS.md](docs/TICKETS.md): how the project was built, in three phases and 50 tickets
 - [CONTRIBUTING.md](CONTRIBUTING.md): workflow and checks (`npm run lint`, `npm run typecheck`, `npm test`)

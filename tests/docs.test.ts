@@ -18,6 +18,7 @@ const DOCS = [
   "examples/README.md",
   "docs/ARCHITECTURE.md",
   "docs/DEPLOYMENT.md",
+  "docs/DEMO.md",
   "docs/REPORT_TEMPLATE.md",
   "docs/ROADMAP.md",
 ];

@@ -98,6 +98,6 @@ describe("docker-compose.yml (P046)", () => {
   });
 
   it("has a CLI service for one-off commands", () => {
-    expect(compose).toMatch(/  pixelguard:\n[\s\S]*profiles: \["cli"\]/);
+    expect(compose).toMatch(/ {2}pixelguard:\n[\s\S]*profiles: \["cli"\]/);
   });
 });

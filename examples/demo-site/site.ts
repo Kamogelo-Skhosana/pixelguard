@@ -5,10 +5,11 @@
  *   - home:    the "last updated" date changes           -> should be Acceptable
  *   - pricing: a CSS mistake breaks the card layout      -> should be a Real Bug
  *   - blog:    nothing changes
+ * Add ?version=1 or ?version=2 to any URL to view that version in a browser.
  * Every page also shows a live clock, which changes on every capture; the
  * demo regions file marks it "ignore" so it never counts as a change.
  *
- * Ticket: P034
+ * Tickets: P034, P049
  */
 
 import { createServer, type Server } from "node:http";
@@ -107,7 +108,12 @@ export async function startDemoSite(
 ): Promise<DemoSite> {
   let version: DemoVersion = options.version ?? 1;
   const server: Server = createServer((req, res) => {
-    const html = page((req.url ?? "/").split("?")[0], version);
+    const url = new URL(req.url ?? "/", "http://demo");
+    // ?version=1 or ?version=2 shows that version for one page view, so a
+    // presenter can open "before" and "after" side by side (P049).
+    const asked = url.searchParams.get("version");
+    const shown: DemoVersion = asked === "1" ? 1 : asked === "2" ? 2 : version;
+    const html = page(url.pathname, shown);
     if (html === null) {
       res.writeHead(404, { "Content-Type": "text/plain" });
       res.end("Not found");
