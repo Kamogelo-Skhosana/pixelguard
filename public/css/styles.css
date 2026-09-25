@@ -127,3 +127,118 @@ table.runs {
 .error {
   border-color: #e12d39;
 }
+
+/* ---- Run detail (P040) ---- */
+.run-header h1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.headline {
+  font-size: 1.1rem;
+  margin-top: 0;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 8px 0;
+  font-size: 0.9rem;
+}
+.change-note,
+.explanation {
+  margin: 12px 0;
+  padding: 8px 12px;
+  border-left: 4px solid #9fb3c8;
+  background: #f0f4f8;
+}
+.pages {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 24px;
+}
+.page {
+  background: #fff;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  padding: 0 16px 16px;
+}
+.page > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  cursor: pointer;
+  flex-wrap: wrap;
+}
+.page-name {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+.page--fail {
+  border-left: 4px solid #e12d39;
+}
+.page--review {
+  border-left: 4px solid #f0b429;
+}
+.shot {
+  border-top: 1px solid #e4e7eb;
+  padding-top: 12px;
+  margin-top: 12px;
+}
+.shot-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.shot-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.facts {
+  margin: 8px 0;
+  padding-left: 20px;
+  font-size: 0.9rem;
+}
+.observed ul {
+  margin: 4px 0 8px;
+}
+.images {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+.shot-image {
+  margin: 0;
+}
+.shot-image figcaption {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  color: #627d98;
+  margin-bottom: 4px;
+}
+.shot-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 600px;
+  object-fit: contain;
+  object-position: top;
+  border: 1px solid #d9e2ec;
+  background: #fff;
+}
+.missing {
+  padding: 24px 12px;
+  border: 1px dashed #bcccdc;
+  color: #627d98;
+  font-size: 0.85rem;
+  text-align: center;
+}
+@media (max-width: 800px) {
+  .images {
+    grid-template-columns: 1fr;
+  }
+}

@@ -100,7 +100,7 @@ Suggested labels: `phase-1`, `phase-2`, `phase-3`, plus an epic label per group 
 ### Epic: Dashboard Frontend
 
 - [x] **P039** — Build run list page (table: date, target, pass/fail summary)
-- [ ] **P040** — Build run detail page (side-by-side baseline/current/diff viewer per page)
+- [x] **P040** — Build run detail page (side-by-side baseline/current/diff viewer per page)
 - [ ] **P041** — Build a trend chart view (regressions found over time)
 - [ ] **P042** — Add basic styling/theme to the dashboard
 - [ ] **P043** — Wire the frontend to the backend API endpoints

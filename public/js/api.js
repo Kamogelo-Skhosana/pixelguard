@@ -45,3 +45,8 @@ export function fetchRuns(query) {
   }
   return getJson(`/api/runs?${params}`);
 }
+
+/** @param {number} id */
+export function fetchRun(id) {
+  return getJson(`/api/runs/${id}`);
+}

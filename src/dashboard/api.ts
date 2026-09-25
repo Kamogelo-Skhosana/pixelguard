@@ -145,7 +145,7 @@ export function createApiRouter(
       return;
     }
     res.type("png").set("Cache-Control", "no-cache");
-    res.sendFile(file, (err) => err && next(err));
+    sendImage(res, file, next);
   });
 
   // POST /api/runs/:id/accept  { "pages"?: ["pricing"] }  (P044)
@@ -295,7 +295,7 @@ export function createApiRouter(
         return;
       }
       res.type("png").set("Cache-Control", "no-cache");
-      res.sendFile(file, (err) => err && next(err));
+      sendImage(res, file, next);
     } catch (err) {
       next(err);
     }
@@ -338,6 +338,20 @@ export function createApiRouter(
   });
 
   return router;
+}
+
+/**
+ * Sends an image file. A browser cancelling the download (e.g. the user
+ * navigated away while images were loading) is normal, not a server error,
+ * so it isn't reported as one.
+ */
+function sendImage(res: express.Response, file: string, next: express.NextFunction): void {
+  res.sendFile(file, (err?: Error & { code?: string }) => {
+    if (!err) return;
+    if (err.code === "ECONNABORTED" || err.code === "ECONNRESET" || res.req.destroyed) return;
+    if (res.headersSent) return;
+    next(err);
+  });
 }
 
 /**

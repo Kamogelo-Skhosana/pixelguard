@@ -2,6 +2,7 @@
 
 import { h } from "./dom.js";
 import { parseHash } from "./format.js";
+import { renderRunDetail } from "./pages/runDetail.js";
 import { renderRunList } from "./pages/runList.js";
 
 const root = /** @type {HTMLElement} */ (document.getElementById("app"));
@@ -21,16 +22,12 @@ function showError(err) {
 async function route() {
   const { path, params } = parseHash(location.hash);
   document.body.dataset.route = path;
+  window.scrollTo(0, 0);
   try {
     if (path === "/runs") {
       await renderRunList(root, params);
     } else if (/^\/runs\/\d+$/.test(path)) {
-      // Run detail page arrives in P040.
-      root.replaceChildren(
-        h("h1", {}, `Run ${path.split("/")[2]}`),
-        h("p", { class: "muted" }, "The run detail view is coming soon."),
-        h("p", {}, h("a", { href: "#/runs" }, "← Back to runs"))
-      );
+      await renderRunDetail(root, Number(path.split("/")[2]));
     } else {
       root.replaceChildren(
         h("h1", {}, "Page not found"),
@@ -41,6 +38,8 @@ async function route() {
     showError(err);
   } finally {
     document.body.dataset.ready = "true";
+    // Counts finished renders, so tests can wait for "the next render" without races.
+    document.body.dataset.renders = String(Number(document.body.dataset.renders ?? "0") + 1);
   }
 }
 

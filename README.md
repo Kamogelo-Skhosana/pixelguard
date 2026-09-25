@@ -36,7 +36,7 @@ Every `pixelguard diff` run is saved to `pixelguard.db`. Start the dashboard wit
 npm run pixelguard -- dashboard        # http://127.0.0.1:8100
 ```
 
-Open it in your browser to see every run — newest first, filterable by status.
+Open it in your browser to see every run — newest first, filterable by status — and click a run to see each page's verdict, the judge's explanation, and the baseline, current and diff screenshots side by side.
 
 ## Accepting Intentional Changes
 

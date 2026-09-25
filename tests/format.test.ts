@@ -7,6 +7,10 @@
 import { describe, expect, it } from "vitest";
 import {
   buildHash,
+  describeSizeChange,
+  formatCount,
+  formatPercent,
+  screenshotLabel,
   headlineDetail,
   pageCounts,
   parseHash,
@@ -88,5 +92,49 @@ describe("parseHash / buildHash", () => {
     const hash = buildHash("/runs", { status: "review", page: 3 });
     const { path, params } = parseHash(hash);
     expect(buildHash(path, Object.fromEntries(params))).toBe(hash);
+  });
+});
+
+describe("detail page helpers (P040)", () => {
+  it.each([
+    [0, "0%"],
+    [0.001, "<0.01%"],
+    [5, "5.00%"],
+    [null, "—"],
+  ])("formatPercent(%s) -> %s", (p, expected) => {
+    expect(formatPercent(p)).toBe(expected);
+  });
+
+  it("formatCount adds thousands separators", () => {
+    expect(formatCount(1234567)).toBe("1,234,567");
+    expect(formatCount(null)).toBe("—");
+  });
+
+  const base = {
+    compared: true,
+    changed: true,
+    verdict: null,
+    confidence: null,
+    judgeError: null,
+    status: "review",
+  };
+  it.each([
+    [{ ...base, compared: false }, "Not compared", "review"],
+    [{ ...base, changed: false, status: "pass" }, "Unchanged", "pass"],
+    [{ ...base, judgeError: "x" }, "Couldn't be judged", "review"],
+    [{ ...base, verdict: "Real Bug", confidence: 9, status: "fail" }, "Real Bug (9/10)", "fail"],
+    [base, "Changed (not judged)", "review"],
+  ])("screenshotLabel %#", (shot, text, status) => {
+    expect(screenshotLabel(shot)).toEqual({ text, status });
+  });
+
+  it("describeSizeChange", () => {
+    const shot = {
+      sizeChanged: true,
+      baselineSize: { width: 390, height: 900 },
+      currentSize: { width: 836, height: 844 },
+    };
+    expect(describeSizeChange(shot)).toBe("width 390px → 836px, height 900px → 844px");
+    expect(describeSizeChange({ ...shot, sizeChanged: false })).toBe("");
   });
 });

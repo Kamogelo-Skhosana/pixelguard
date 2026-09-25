@@ -106,3 +106,56 @@ export function buildHash(path, params = {}) {
   const qs = query.toString();
   return `#${path}${qs ? `?${qs}` : ""}`;
 }
+
+/**
+ * "5.00%", "<0.01%", "0%".
+ * @param {number | null} percent
+ */
+export function formatPercent(percent) {
+  if (percent === null || percent === undefined) return "—";
+  if (percent === 0) return "0%";
+  if (percent < 0.01) return "<0.01%";
+  return `${percent.toFixed(2)}%`;
+}
+
+/**
+ * 1234567 -> "1,234,567".
+ * @param {number | null} n
+ */
+export function formatCount(n) {
+  if (n === null || n === undefined) return "—";
+  return Math.round(n)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+/**
+ * How one screenshot turned out, as a short label and a status class.
+ * @param {{ compared: boolean, changed: boolean | null, verdict: string | null,
+ *           confidence: number | null, judgeError: string | null, status: string }} shot
+ */
+export function screenshotLabel(shot) {
+  if (!shot.compared) return { text: "Not compared", status: "review" };
+  if (!shot.changed) return { text: "Unchanged", status: "pass" };
+  if (shot.judgeError) return { text: "Couldn't be judged", status: "review" };
+  if (shot.verdict) {
+    const conf = shot.confidence ? ` (${shot.confidence}/10)` : "";
+    return { text: `${shot.verdict}${conf}`, status: shot.status };
+  }
+  return { text: "Changed (not judged)", status: "review" };
+}
+
+/**
+ * "height 2000px → 2300px", or "" if the size didn't change.
+ * @param {{ sizeChanged: boolean | null, baselineSize: {width:number,height:number} | null,
+ *           currentSize: {width:number,height:number} | null }} shot
+ */
+export function describeSizeChange(shot) {
+  if (!shot.sizeChanged || !shot.baselineSize || !shot.currentSize) return "";
+  const b = shot.baselineSize;
+  const c = shot.currentSize;
+  const parts = [];
+  if (b.width !== c.width) parts.push(`width ${b.width}px → ${c.width}px`);
+  if (b.height !== c.height) parts.push(`height ${b.height}px → ${c.height}px`);
+  return parts.join(", ");
+}

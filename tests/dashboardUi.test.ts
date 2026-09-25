@@ -47,17 +47,41 @@ async function serve(db: Database.Database): Promise<{ url: string; close: () =>
   };
 }
 
+const renders = () => page.evaluate(() => Number(document.body.dataset.renders ?? "0"));
+
+/**
+ * Loads a URL and waits for the app's first render. Waits for
+ * DOMContentLoaded (the app's module script has run by then) rather than the
+ * full load event, and reports page errors and HTML if it ever times out.
+ */
 async function open(url: string) {
-  await page.goto(url);
-  await page.waitForSelector('body[data-ready="true"]');
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15_000 });
+  try {
+    await page.waitForFunction(() => Number(document.body.dataset.renders ?? "0") >= 1, undefined, {
+      timeout: 15_000,
+    });
+  } catch (err) {
+    const html = (await page.content()).slice(0, 500);
+    throw new Error(
+      `The dashboard didn't render ${url}. Page errors: ${JSON.stringify(pageErrors)}. HTML: ${html}`,
+      { cause: err }
+    );
+  }
+}
+
+/**
+ * Runs an action that changes the route, then waits for the app to finish
+ * the next render. (Waiting on a "ready" flag would race: it's still true
+ * from the previous render until the browser fires hashchange.)
+ */
+async function settled(action: () => Promise<unknown>) {
+  const before = await renders();
+  await action();
+  await page.waitForFunction((b) => Number(document.body.dataset.renders ?? "0") > b, before);
 }
 
 async function navigate(hash: string) {
-  await page.evaluate((h) => {
-    document.body.dataset.ready = "false";
-    location.hash = h;
-  }, hash);
-  await page.waitForSelector('body[data-ready="true"]');
+  await settled(() => page.evaluate((h) => (location.hash = h), hash));
 }
 
 const rowIds = () =>
@@ -134,29 +158,26 @@ describe("run list page (P039)", () => {
 
   it("pages to older runs and back", async () => {
     await open(app.url);
-    await page.click("text=Older →");
-    await page.waitForSelector('body[data-ready="true"]');
+    await settled(() => page.click("text=Older →"));
     expect(page.url()).toMatch(/#\/runs\?page=2$/);
     expect(await rowIds()).toEqual([5, 4, 3, 2, 1]);
     await expect(page.locator("#page-info").textContent()).resolves.toBe(
       "26–30 of 30 runs · page 2 of 2"
     );
 
-    await page.goBack();
-    await page.waitForSelector('body[data-ready="true"]');
+    await settled(() => page.goBack());
     expect((await rowIds())[0]).toBe(30);
   });
 
   it("filters by status, keeping the filter in the URL", async () => {
     await open(app.url);
-    await page.selectOption("#status-filter", "fail");
-    await page.waitForFunction(() => location.hash === "#/runs?status=fail");
-    await page.waitForSelector('body[data-ready="true"]');
+    await settled(() => page.selectOption("#status-filter", "fail"));
+    expect(page.url()).toMatch(/#\/runs\?status=fail$/);
     expect(await rowIds()).toEqual([30, 27, 24, 21, 18, 15, 12, 9, 6, 3]);
 
     // Reloading keeps the filter.
     await page.reload();
-    await page.waitForSelector('body[data-ready="true"]');
+    await page.waitForFunction(() => Number(document.body.dataset.renders ?? "0") >= 1);
     await expect(page.locator("#status-filter").inputValue()).resolves.toBe("fail");
   });
 
@@ -252,5 +273,190 @@ describe("frontend delivery (P039)", () => {
       await app.close();
       db.close();
     }
+  });
+});
+
+describe("run detail page (P040)", () => {
+  let db: Database.Database;
+  let app: { url: string; close: () => Promise<void> };
+  const fx = (name: string, file: string) => `tests/fixtures/diff/${name}/${file}.png`;
+
+  beforeAll(async () => {
+    db = getDatabase(":memory:");
+    saveRun(db, {
+      targetUrl: "https://shop.example.com",
+      baselineTag: "baseline",
+      currentTag: "current",
+      changeDescription: "Updated the homepage date",
+      createdAt: new Date("2026-09-25T08:00:00.000Z"),
+      results: [
+        {
+          ...shot("pricing", "Real Bug"),
+          viewport: "desktop",
+          pixelDiffCount: 1200,
+          totalPixels: 24000,
+          percentChanged: 5,
+          explanation: "Cards overlap. <img src=x onerror=\"document.title='hacked'\">",
+          observedChanges: ["Cards overlap", "Borders cut through prices"],
+          ignoredRegions: [{ label: "Live clock", rect: { x: 0, y: 0, width: 5, height: 5 } }],
+          baselineImagePath: fx("button-colour", "baseline"),
+          currentImagePath: fx("button-colour", "current"),
+          diffImagePath: fx("element-shift", "current"),
+        },
+        {
+          ...shot("pricing", "Acceptable Change"),
+          viewport: "mobile",
+          sizeChanged: true,
+          baselineSize: { width: 390, height: 900 },
+          currentSize: { width: 390, height: 1000 },
+          baselineImagePath: fx("identical", "baseline"),
+          currentImagePath: fx("identical", "current"),
+          diffImagePath: "tests/fixtures/diff/cleaned-up.png",
+        },
+        {
+          ...shot("home"),
+          viewport: "desktop",
+          changed: true,
+          pixelDiffCount: 3,
+          percentChanged: 0.001,
+          verdict: "Uncertain",
+          explanation: "Could not be judged automatically: LLM API error 529",
+          judgeError: "LLM API error 529",
+          judgedBy: "claude-sonnet-5",
+          baselineImagePath: fx("identical", "baseline"),
+          currentImagePath: fx("identical", "current"),
+          diffImagePath: fx("identical", "current"),
+        },
+        { ...shot("home"), viewport: "mobile" },
+        { ...shot("about"), viewport: "desktop" },
+      ],
+      skipped: [{ page: "blog", viewport: "desktop", reason: 'not in "current" (removed page?)' }],
+    });
+    app = await serve(db);
+  });
+
+  afterAll(async () => {
+    await app.close();
+    db.close();
+  });
+
+  const card = (pageName: string, viewport: string) =>
+    page.locator(`details[data-page="${pageName}"] .shot[data-viewport="${viewport}"]`);
+
+  it("shows the run header with its summary and developer note", async () => {
+    await open(`${app.url}/#/runs/1`);
+    await expect(page.locator("h1").textContent()).resolves.toBe("Run #1 ✗ FAIL");
+    await expect(page.locator("#run-headline").textContent()).resolves.toContain(
+      "1 real bug on 1 page"
+    );
+    await expect(page.locator(".meta").textContent()).resolves.toContain(
+      "https://shop.example.com"
+    );
+    await expect(page.locator(".change-note").textContent()).resolves.toContain(
+      "Updated the homepage date"
+    );
+    // The only error allowed is the deliberately cleaned-up image's 404.
+    expect(pageErrors.filter((e) => !e.includes("404"))).toEqual([]);
+  });
+
+  it("lists pages worst first, with passing pages collapsed", async () => {
+    await open(`${app.url}/#/runs/1`);
+    const pages = await page
+      .locator("details.page")
+      .evaluateAll((els) =>
+        els.map((e) => [e.getAttribute("data-page"), (e as HTMLDetailsElement).open])
+      );
+    expect(pages).toEqual([
+      ["pricing", true],
+      ["home", true],
+      ["blog", true],
+      ["about", false],
+    ]);
+  });
+
+  it("shows a changed screenshot's verdict, numbers, explanation and what the judge saw", async () => {
+    await open(`${app.url}/#/runs/1`);
+    const c = card("pricing", "desktop");
+    await expect(c.locator(".badge").textContent()).resolves.toBe("Real Bug (9/10)");
+    const facts = await c.locator(".facts").textContent();
+    expect(facts).toContain("5.00% of the page (1,200 pixels)");
+    expect(facts).toContain("Ignored regions: Live clock");
+    await expect(c.locator(".observed li").allTextContents()).resolves.toEqual([
+      "Cards overlap",
+      "Borders cut through prices",
+    ]);
+  });
+
+  it("shows baseline, current and diff images side by side, each linking to full size", async () => {
+    await open(`${app.url}/#/runs/1`);
+    const imgs = card("pricing", "desktop").locator(".images img");
+    await expect(imgs.count()).resolves.toBe(3);
+    await page.waitForFunction(() =>
+      Array.from(document.querySelectorAll('[data-viewport="desktop"] .images img')).every(
+        (i) => (i as HTMLImageElement).complete
+      )
+    );
+    const widths = await imgs.evaluateAll((els) =>
+      els.map((e) => (e as HTMLImageElement).naturalWidth)
+    );
+    expect(widths.every((w) => w > 0)).toBe(true);
+    const captions = await card("pricing", "desktop").locator("figcaption").allTextContents();
+    expect(captions).toEqual(["Baseline", "Current", "Diff"]);
+    const href = await card("pricing", "desktop").locator(".images a").first().getAttribute("href");
+    expect(href).toMatch(/^\/api\/runs\/1\/diffs\/\d+\/baseline$/);
+  });
+
+  it("shows a placeholder when an image has been cleaned up", async () => {
+    await open(`${app.url}/#/runs/1`);
+    const missing = card("pricing", "mobile").locator(".missing");
+    await missing.waitFor();
+    await expect(missing.textContent()).resolves.toContain("no longer available");
+    const facts = await card("pricing", "mobile").locator(".facts").textContent();
+    expect(facts).toContain("height 900px → 1000px");
+  });
+
+  it("shows a failed judgement with its error", async () => {
+    await open(`${app.url}/#/runs/1`);
+    const c = card("home", "desktop");
+    await expect(c.locator(".badge").textContent()).resolves.toBe("Couldn't be judged");
+    await expect(c.locator(".explanation").textContent()).resolves.toBe("LLM API error 529");
+    await expect(c.locator(".facts").textContent()).resolves.toContain("<0.01% of the page");
+    await expect(page.locator('details[data-page="home"] .unchanged').textContent()).resolves.toBe(
+      "Unchanged: mobile."
+    );
+  });
+
+  it("shows skipped screenshots with their reason and no images", async () => {
+    await open(`${app.url}/#/runs/1`);
+    const c = card("blog", "desktop");
+    await expect(c.locator(".badge").textContent()).resolves.toBe("Not compared");
+    await expect(c.locator(".facts").textContent()).resolves.toContain(
+      'not in "current" (removed page?)'
+    );
+    await expect(c.locator(".images").count()).resolves.toBe(0);
+  });
+
+  it("shows explanations as text, never as HTML", async () => {
+    await open(`${app.url}/#/runs/1`);
+    const text = await card("pricing", "desktop").locator(".explanation").textContent();
+    expect(text).toContain("<img src=x onerror=");
+    expect(await page.title()).toBe("pixelguard dashboard");
+    expect(await page.locator(".explanation img").count()).toBe(0);
+  });
+
+  it("opens from the run list and goes back", async () => {
+    await open(app.url);
+    await page.click('.run-row[data-run-id="1"] td:nth-child(3)');
+    await page.waitForFunction(() => location.hash === "#/runs/1");
+    await page.waitForSelector("#pages");
+    await page.click("text=← All runs");
+    await page.waitForSelector("#runs-table");
+  });
+
+  it("says when a run doesn't exist", async () => {
+    await open(`${app.url}/#/runs/999`);
+    await expect(page.locator("#not-found").textContent()).resolves.toContain(
+      "There's no run #999"
+    );
   });
 });
