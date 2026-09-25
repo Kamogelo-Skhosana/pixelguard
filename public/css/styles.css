@@ -702,3 +702,120 @@ table.runs {
     animation: none !important;
   }
 }
+
+/* ---------- Actions: accept and restore (P043) ---------- */
+.button {
+  cursor: pointer;
+}
+.button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.button--primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+  font-weight: 600;
+}
+.button--primary:hover {
+  background: color-mix(in srgb, var(--ink) 85%, var(--accent));
+  border-color: color-mix(in srgb, var(--ink) 85%, var(--accent));
+}
+.accept-panel {
+  margin: 20px 0 0;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+}
+.accept-panel h2 {
+  margin: 0 0 4px;
+  font-size: var(--step-1);
+}
+.accept-panel > p:first-of-type {
+  margin-top: 0;
+}
+.page-actions {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.confirm p,
+.notice p {
+  margin: 0 0 10px;
+}
+.confirm-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.notice {
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+.notice > p:last-child {
+  margin-bottom: 0;
+}
+.notice--ok {
+  background: var(--pass-bg);
+  border-color: color-mix(in srgb, var(--pass) 40%, transparent);
+  color: var(--pass-ink);
+}
+.notice--ok a {
+  color: inherit;
+}
+.notice--error {
+  background: var(--fail-bg);
+  border-color: color-mix(in srgb, var(--fail) 40%, transparent);
+  color: var(--fail-ink);
+}
+.notice-slot:not(:empty) {
+  margin: 0 0 var(--gap);
+}
+.working {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--ink-soft);
+}
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.badge--neutral {
+  background: var(--surface-sunk);
+  color: var(--ink-soft);
+}
+
+/* Baseline history (P043) */
+.history td {
+  vertical-align: middle;
+}
+.history tr.is-current td {
+  background: color-mix(in srgb, var(--pass-bg) 45%, transparent);
+}
+.row-actions {
+  text-align: right;
+  min-width: 140px;
+}
+.row-actions .action[data-state="confirming"],
+.row-actions .action[data-state="failed"],
+.row-actions .action[data-state="done"] {
+  text-align: left;
+  min-width: 280px;
+}
+.version-page h2.page-name {
+  margin: 14px 0 8px;
+}

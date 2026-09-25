@@ -209,7 +209,7 @@ export function createApiRouter(
       res.json({ accepted });
     } catch (err) {
       if (err instanceof AcceptError) {
-        res.status(409).json({ error: err.message });
+        res.status(409).json({ error: err.message, ...(err.code && { code: err.code }) });
         return;
       }
       next(err);
@@ -330,7 +330,7 @@ export function createApiRouter(
       });
     } catch (err) {
       if (err instanceof AcceptError) {
-        res.status(409).json({ error: err.message });
+        res.status(409).json({ error: err.message, ...(err.code && { code: err.code }) });
         return;
       }
       next(err);

@@ -61,7 +61,14 @@ export interface AcceptResult {
 
 /** Thrown when an accept is refused (bad input, failed screenshots...). Nothing is changed. */
 export class AcceptError extends Error {
-  constructor(message: string) {
+  /**
+   * @param code machine-readable reason for API clients, e.g. "failed_screenshots"
+   *   (the dashboard offers to accept just the screenshots that worked).
+   */
+  constructor(
+    message: string,
+    readonly code?: "failed_screenshots"
+  ) {
     super(message);
     this.name = "AcceptError";
   }
@@ -128,7 +135,8 @@ export async function acceptAsBaseline(options: AcceptOptions): Promise<AcceptRe
   if (failures.length > 0 && !options.force) {
     throw new AcceptError(
       `Not accepting "${fromTag}": ${failures.length} screenshot(s) failed (${failures.join(", ")}). ` +
-        `Re-capture, or use --force to accept only the screenshots that worked.`
+        `Re-capture, or use --force to accept only the screenshots that worked.`,
+      "failed_screenshots"
     );
   }
   const accepted = chosen.map(okOnly).filter((p) => p.screenshots.length > 0);

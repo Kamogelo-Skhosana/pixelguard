@@ -1,8 +1,9 @@
 // Run detail page: #/runs/:id — every page of a run with a side-by-side
 // baseline / current / diff viewer for each changed screenshot. (P040)
 
-import { ApiError, fetchRun } from "../api.js";
-import { h } from "../dom.js";
+import { acceptRun, ApiError, fetchRun } from "../api.js";
+import { confirmable } from "../actions.js";
+import { h, setChildren } from "../dom.js";
 import {
   describeSizeChange,
   formatCount,
@@ -122,7 +123,95 @@ function screenshotCard(page, shot) {
   );
 }
 
-function pageSection(page) {
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** When some screenshots failed, offers to accept just the ones that worked. */
+function forceOffer(err) {
+  if (err instanceof ApiError && err.code === "failed_screenshots") {
+    return {
+      label: "Accept the screenshots that worked",
+      options: { force: true },
+      note: "Screenshots that failed are left out; the baseline keeps its old ones for those.",
+    };
+  }
+  return null;
+}
+
+/** "Accepted 4 screenshots … as version 3." with a link to the history. */
+function acceptedMessage(accepted) {
+  return [
+    h(
+      "p",
+      {},
+      h("strong", {}, "Accepted. "),
+      `${plural(accepted.screenshots, "screenshot")} from "${accepted.fromTag}" `,
+      accepted.wholeCapture ? "are " : `(${accepted.pages.join(", ")}) are `,
+      `now the "${accepted.toTag}" baseline (version ${accepted.version}). `,
+      "Run pixelguard diff again to compare against it."
+    ),
+    h(
+      "p",
+      {},
+      h(
+        "a",
+        { href: `#/baselines/${encodeURIComponent(accepted.toTag)}` },
+        "View the baseline history"
+      ),
+      " (the previous baseline can be restored from there)."
+    ),
+  ];
+}
+
+/** The "accept this page" control at the bottom of a changed page. */
+function pageAccept(run, page) {
+  return h(
+    "div",
+    { class: "page-actions" },
+    confirmable({
+      id: `accept-page-${page.page}`,
+      label: "Accept this page",
+      question: `Make the "${run.currentTag}" screenshots of ${page.page} the new "${run.baselineTag}" for this page? Other pages keep their current baseline.`,
+      confirmLabel: "Yes, accept this page",
+      workingLabel: `Accepting ${page.page}…`,
+      action: (options) => acceptRun(run.id, { pages: [page.page], ...options }),
+      success: (r) => acceptedMessage(r.accepted),
+      fallback: forceOffer,
+    })
+  );
+}
+
+/** Panel for accepting the whole run, shown when something changed. */
+function acceptPanel(run) {
+  return h(
+    "section",
+    { class: "accept-panel", id: "accept" },
+    h("h2", {}, "Accept these changes"),
+    h(
+      "p",
+      {},
+      `If these changes are what you intended, make the "${run.currentTag}" screenshots from this run the new "${run.baselineTag}". `,
+      "Future runs will compare against them. The old baseline is kept in its history, so you can restore it."
+    ),
+    confirmable({
+      id: "accept-all",
+      label: "Accept all pages",
+      primary: true,
+      question: `Replace the whole "${run.baselineTag}" baseline with every page from "${run.currentTag}"?`,
+      confirmLabel: "Yes, accept all pages",
+      workingLabel: "Accepting all pages…",
+      action: (options) => acceptRun(run.id, options),
+      success: (r) => acceptedMessage(r.accepted),
+      fallback: forceOffer,
+    }),
+    h(
+      "p",
+      { class: "muted small" },
+      "To accept only some pages, use the button at the bottom of each changed page."
+    )
+  );
+}
+
+function pageSection(page, run) {
   // Changed and not-compared screenshots get a card (worst first); unchanged ones are listed.
   const cards = page.screenshots
     .filter((s) => !s.compared || s.changed)
@@ -142,7 +231,8 @@ function pageSection(page) {
     ...cards.map((shot) => screenshotCard(page, shot)),
     unchanged.length > 0
       ? h("p", { class: "muted small unchanged" }, `Unchanged: ${unchanged.join(", ")}.`)
-      : null
+      : null,
+    page.status !== "pass" ? pageAccept(run, page) : null
   );
 }
 
@@ -188,12 +278,13 @@ function runHeader(run) {
  * Renders the run detail page into `root`.
  * @param {HTMLElement} root
  * @param {number} id
+ * @param {{ signal?: AbortSignal }} [ctx] cancelled when the user navigates away
  */
-export async function renderRunDetail(root, id) {
+export async function renderRunDetail(root, id, ctx) {
   root.replaceChildren(h("p", { class: "muted", id: "loading" }, `Loading run #${id}…`));
   let detail;
   try {
-    detail = await fetchRun(id);
+    detail = await fetchRun(id, { signal: ctx?.signal });
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
       root.replaceChildren(
@@ -207,10 +298,14 @@ export async function renderRunDetail(root, id) {
   }
 
   const pages = [...detail.pages].sort((a, b) => RANK[a.status] - RANK[b.status]);
-  root.replaceChildren(
-    runHeader(detail.run),
+  const run = detail.run;
+  setChildren(
+    root,
+    runHeader(run),
+    // Nothing to accept when every page passed.
+    pages.some((p) => p.status !== "pass") ? acceptPanel(run) : null,
     pages.length > 0
-      ? h("section", { class: "pages", id: "pages" }, ...pages.map(pageSection))
+      ? h("section", { class: "pages", id: "pages" }, ...pages.map((p) => pageSection(p, run)))
       : h("div", { class: "empty" }, "This run didn't compare any pages.")
   );
 }

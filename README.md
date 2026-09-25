@@ -40,11 +40,13 @@ Open it in your browser to see every run — newest first, filterable by status 
 
 The **Trend** tab charts regressions over time — failing and needs-review pages per day, week or run, with real bugs marked — so you can see whether things are getting better or worse.
 
+If the changes in a run are intended, accept them straight from the run's page — all pages at once, or page by page. The **Baselines** tab lists every baseline version and can restore an old one.
+
 The dashboard has light and dark themes. It follows your system setting, and the button in the top bar switches between auto, light and dark.
 
 ## Accepting Intentional Changes
 
-When a diff shows a change you meant to make, make it the new baseline:
+When a diff shows a change you meant to make, make it the new baseline — from the dashboard (see above) or the command line:
 
 ```bash
 npm run pixelguard -- accept --from current                    # whole capture

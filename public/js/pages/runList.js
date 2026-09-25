@@ -125,8 +125,9 @@ function pager(list, page, status) {
  * Renders the run list into `root`.
  * @param {HTMLElement} root
  * @param {URLSearchParams} params
+ * @param {{ signal?: AbortSignal }} [ctx] cancelled when the user navigates away
  */
-export async function renderRunList(root, params) {
+export async function renderRunList(root, params, ctx) {
   const status = ["fail", "review", "pass"].includes(params.get("status") ?? "")
     ? params.get("status")
     : "";
@@ -138,7 +139,10 @@ export async function renderRunList(root, params) {
     h("p", { class: "muted", id: "loading" }, "Loading runs…")
   );
 
-  const list = await fetchRuns({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE, status });
+  const list = await fetchRuns(
+    { limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE, status },
+    { signal: ctx?.signal }
+  );
 
   const content =
     list.total === 0

@@ -51,3 +51,15 @@ export function svg(tag, attrs = {}, ...children) {
   }
   return el;
 }
+
+/**
+ * Replaces an element's children, skipping null/undefined/false like h() does
+ * (plain replaceChildren would print them as text). Ticket: P043
+ * @param {Element} el
+ * @param {...(Node | string | null | undefined | false)} children
+ */
+export function setChildren(el, ...children) {
+  el.replaceChildren(
+    ...children.flat().filter((c) => c !== null && c !== undefined && c !== false)
+  );
+}

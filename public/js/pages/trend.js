@@ -267,10 +267,11 @@ function dataTable(trend) {
 /**
  * @param {HTMLElement} root
  * @param {URLSearchParams} params
+ * @param {{ signal?: AbortSignal }} [ctx] cancelled when the user navigates away
  */
-export async function renderTrend(root, params) {
+export async function renderTrend(root, params, ctx) {
   const options = trendOptions(params);
-  const trend = await fetchTrend(options);
+  const trend = await fetchTrend(options, { signal: ctx?.signal });
   const heading = h("h1", {}, "Regressions over time");
   const range = h("p", { class: "muted", id: "trend-range" }, `${trend.from} to ${trend.to} (UTC)`);
 

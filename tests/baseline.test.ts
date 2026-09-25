@@ -321,6 +321,24 @@ describe("POST /api/runs/:id/accept (P044)", () => {
     expect((await post(path, body)).status).toBe(status);
   });
 
+  it("flags failed screenshots with a code, and accepts the rest when forced (P043)", async () => {
+    await capture(
+      "current",
+      { home: { desktop: "button-colour", mobile: "FAIL" } },
+      "2026-09-25T08:00:00.000Z"
+    );
+    const refused = await post("/api/runs/2/accept", {});
+    expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe("failed_screenshots");
+    expect(fixtureOf("baseline", "desktop/home.png")).toBe("identical");
+
+    const forced = await post("/api/runs/2/accept", { force: true });
+    expect(forced.status).toBe(200);
+    expect(forced.body.accepted.screenshots).toBe(1);
+    // Other refusals carry no code.
+    expect((await post("/api/runs/2/accept", { pages: ["missing"] })).body.code).toBeUndefined();
+  });
+
   it("returns 409 when the capture no longer exists", async () => {
     await rm(join(out, "current"), { recursive: true });
     const r = await post("/api/runs/2/accept", {});
