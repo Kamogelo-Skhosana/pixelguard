@@ -38,6 +38,8 @@ npm run pixelguard -- dashboard        # http://127.0.0.1:8100
 
 Open it in your browser to see every run — newest first, filterable by status — and click a run to see each page's verdict, the judge's explanation, and the baseline, current and diff screenshots side by side.
 
+The **Trend** tab charts regressions over time — failing and needs-review pages per day, week or run, with real bugs marked — so you can see whether things are getting better or worse.
+
 ## Accepting Intentional Changes
 
 When a diff shows a change you meant to make, make it the new baseline:

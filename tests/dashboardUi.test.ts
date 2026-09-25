@@ -460,3 +460,143 @@ describe("run detail page (P040)", () => {
     );
   });
 });
+
+describe("trend page (P041)", () => {
+  let db: Database.Database;
+  let app: { url: string; close: () => Promise<void> };
+  let emptyDb: Database.Database;
+  let emptyApp: { url: string; close: () => Promise<void> };
+  const runIds: number[] = [];
+
+  /** Like serve(), but with a fixed "now" so the trend window is stable. */
+  async function serveAt(database: Database.Database) {
+    const server: Server = createApp({
+      db: database,
+      now: () => new Date("2026-09-25T12:00:00.000Z"),
+    }).listen(0, "127.0.0.1");
+    await new Promise((r) => server.once("listening", r));
+    return {
+      url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+      close: () => new Promise<void>((r) => server.close(() => r())),
+    };
+  }
+
+  const save = (results: DiffResult[], iso: string) =>
+    runIds.push(
+      saveRun(db, {
+        results,
+        targetUrl: "https://shop.example.com",
+        baselineTag: "baseline",
+        currentTag: "current",
+        createdAt: new Date(iso),
+      })
+    );
+
+  beforeAll(async () => {
+    db = getDatabase(":memory:");
+    save([shot("home"), shot("about")], "2026-08-01T10:00:00.000Z"); // outside 30 days
+    save([shot("home"), shot("about")], "2026-09-20T10:00:00.000Z"); // all pass
+    save([shot("home", "Real Bug"), shot("about")], "2026-09-24T10:00:00.000Z");
+    save([shot("home", "Uncertain"), shot("about")], "2026-09-24T11:00:00.000Z");
+    app = await serveAt(db);
+    emptyDb = getDatabase(":memory:");
+    emptyApp = await serveAt(emptyDb);
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await emptyApp.close();
+    db.close();
+    emptyDb.close();
+  });
+
+  const tileValue = (id: string) => page.locator(`#${id} .tile-value`).textContent();
+
+  it("shows totals and one bar per day for the last 30 days", async () => {
+    await open(`${app.url}/#/trend`);
+    await expect(page.locator("h1").textContent()).resolves.toBe("Regressions over time");
+    await expect(page.locator("#trend-range").textContent()).resolves.toBe(
+      "2026-08-27 to 2026-09-25 (UTC)"
+    );
+    expect(await tileValue("tile-runs")).toBe("3");
+    expect(await tileValue("tile-failing")).toBe("1");
+    expect(await tileValue("tile-review")).toBe("1");
+    expect(await tileValue("tile-bugs")).toBe("1");
+    expect(await tileValue("tile-rate")).toBe("17%"); // 1 of 6 pages
+    expect(await page.locator("#trend-chart .bar").count()).toBe(30);
+    expect(await page.locator("#trend-chart .bar--empty").count()).toBe(28);
+    expect(await page.locator("#trend-chart .seg--fail").count()).toBe(1);
+    expect(await page.locator("#trend-chart .seg--review").count()).toBe(1);
+    expect(await page.locator("#trend-chart .seg--pass").count()).toBe(1);
+    expect(await page.locator("#trend-chart .bug-marker").count()).toBe(1);
+    await expect(page.locator('nav a[href="#/trend"]').getAttribute("aria-current")).resolves.toBe(
+      "page"
+    );
+    expect(await page.locator('nav a[href="#/runs"]').getAttribute("aria-current")).toBeNull();
+    expect(pageErrors).toEqual([]);
+  });
+
+  it("describes a bar on hover and keyboard focus", async () => {
+    await open(`${app.url}/#/trend`);
+    const bar = page.locator('#trend-chart .bar[data-label="2026-09-24"]');
+    await bar.hover();
+    await expect(page.locator("#chart-readout").textContent()).resolves.toBe(
+      "24 Sep: 1 failing, 1 needs review, 1 real bug of 4 pages, 2 runs"
+    );
+    await page.locator('#trend-chart .bar[data-label="2026-09-23"]').focus();
+    await expect(page.locator("#chart-readout").textContent()).resolves.toBe("23 Sep: no runs");
+    await expect(bar.getAttribute("aria-label")).resolves.toContain("24 Sep: 1 failing");
+  });
+
+  it("lists only days with runs in the data table", async () => {
+    await open(`${app.url}/#/trend`);
+    await page.locator("#trend-table summary").click();
+    const rows = await page.locator("#trend-table tbody tr").allTextContents();
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain("20 Sep");
+    expect(rows[1]).toContain("24 Sep");
+  });
+
+  it("switches to per-run bars that open the run", async () => {
+    await open(`${app.url}/#/trend`);
+    await settled(() => page.selectOption("#trend-period", "run"));
+    expect(page.url()).toContain("#/trend?period=run&days=30");
+    const labels = await page
+      .locator("#trend-chart .bar")
+      .evaluateAll((bars) => bars.map((b) => b.getAttribute("aria-label")));
+    expect(labels).toEqual([
+      `Run #${runIds[1]}: 0 failing, 0 needs review of 2 pages`,
+      `Run #${runIds[2]}: 1 failing, 0 needs review, 1 real bug of 2 pages`,
+      `Run #${runIds[3]}: 0 failing, 1 needs review of 2 pages`,
+    ]);
+    await settled(() => page.locator("#trend-chart .bar").nth(1).click());
+    expect(page.url()).toContain(`#/runs/${runIds[2]}`);
+    await expect(page.locator("#run-headline").count()).resolves.toBe(1);
+  });
+
+  it("groups by week and widens the range", async () => {
+    await open(`${app.url}/#/trend?period=week`);
+    const labels = await page.locator("#trend-chart .x-label").allTextContents();
+    expect(labels.every((l) => l.startsWith("w/c "))).toBe(true);
+    expect(labels).toContain("w/c 21 Sep");
+    await settled(() => page.selectOption("#trend-days", "90"));
+    expect(page.url()).toContain("#/trend?period=week&days=90");
+    expect(await tileValue("tile-runs")).toBe("4");
+  });
+
+  it("falls back to defaults for unknown options", async () => {
+    await open(`${app.url}/#/trend?period=hour&days=5`);
+    await expect(page.locator("#trend-period").inputValue()).resolves.toBe("day");
+    await expect(page.locator("#trend-days").inputValue()).resolves.toBe("30");
+    expect(await page.locator("#trend-chart .bar").count()).toBe(30);
+  });
+
+  it("shows an empty state when there are no runs", async () => {
+    await open(`${emptyApp.url}/#/trend`);
+    await expect(page.locator("#trend-empty").textContent()).resolves.toContain(
+      "No runs in the last 30 days."
+    );
+    expect(await page.locator("#trend-chart").count()).toBe(0);
+    expect(pageErrors).toEqual([]);
+  });
+});

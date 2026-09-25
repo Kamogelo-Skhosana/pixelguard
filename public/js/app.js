@@ -4,6 +4,7 @@ import { h } from "./dom.js";
 import { parseHash } from "./format.js";
 import { renderRunDetail } from "./pages/runDetail.js";
 import { renderRunList } from "./pages/runList.js";
+import { renderTrend } from "./pages/trend.js";
 
 const root = /** @type {HTMLElement} */ (document.getElementById("app"));
 
@@ -23,9 +24,20 @@ async function route() {
   const { path, params } = parseHash(location.hash);
   document.body.dataset.route = path;
   window.scrollTo(0, 0);
+  // Highlight the nav link for the current section.
+  for (const link of document.querySelectorAll(".topbar nav a")) {
+    const section = link.getAttribute("href")?.replace(/^#/, "") ?? "";
+    if (path === section || path.startsWith(`${section}/`)) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  }
   try {
     if (path === "/runs") {
       await renderRunList(root, params);
+    } else if (path === "/trend") {
+      await renderTrend(root, params);
     } else if (/^\/runs\/\d+$/.test(path)) {
       await renderRunDetail(root, Number(path.split("/")[2]));
     } else {

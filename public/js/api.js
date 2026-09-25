@@ -50,3 +50,12 @@ export function fetchRuns(query) {
 export function fetchRun(id) {
   return getJson(`/api/runs/${id}`);
 }
+
+/** @param {{ period?: string, days?: number, target?: string }} query */
+export function fetchTrend(query) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  }
+  return getJson(`/api/runs/trend?${params}`);
+}
