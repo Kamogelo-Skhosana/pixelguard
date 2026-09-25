@@ -10,7 +10,7 @@
   "scripts": {
     "pixelguard": "tsx src/cli.ts",
     "build": "tsc -p tsconfig.build.json",
-    "lint": "eslint src tests scripts examples",
+    "lint": "eslint src tests scripts examples public",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",

@@ -36,6 +36,8 @@ Every `pixelguard diff` run is saved to `pixelguard.db`. Start the dashboard wit
 npm run pixelguard -- dashboard        # http://127.0.0.1:8100
 ```
 
+Open it in your browser to see every run — newest first, filterable by status.
+
 ## Accepting Intentional Changes
 
 When a diff shows a change you meant to make, make it the new baseline:
@@ -115,6 +117,7 @@ pixelguard/
 │   ├── cli.ts                 # CLI entry point (argument parsing)
 │   ├── commands.ts            # capture / diff command logic
 │   └── config.ts               # Configuration loading (.env, target profiles)
+├── public/                     # Dashboard frontend (plain HTML/CSS/JS, no build step)
 ├── tests/                      # Unit + integration tests, mirrors src/ layout
 │   └── fixtures/diff/          # Sample baseline/current image pairs for diff tests
 ├── scripts/

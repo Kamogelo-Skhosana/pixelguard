@@ -19,5 +19,22 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // The dashboard frontend runs in the browser (plain JS modules, no build step).
+    files: ["public/**/*.js"],
+    languageOptions: {
+      globals: {
+        window: "readonly",
+        document: "readonly",
+        location: "readonly",
+        fetch: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly",
+        Node: "readonly",
+        HTMLElement: "readonly",
+        console: "readonly",
+      },
+    },
+  },
   prettierConfig
 );
