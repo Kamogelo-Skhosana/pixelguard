@@ -346,6 +346,8 @@ export async function runDiff(
 export interface DashboardCommandOptions {
   port?: number;
   host?: string;
+  /** Turn off accepting/restoring baselines (overrides DASHBOARD_READ_ONLY when set). */
+  readOnly?: boolean;
 }
 
 export interface DashboardCommandDeps {
@@ -383,6 +385,7 @@ export async function runDashboard(
       outputDir: settings.outputDir,
       host: options.host ?? settings.dashboardHost,
       port: options.port ?? settings.dashboardPort,
+      readOnly: options.readOnly ?? settings.dashboardReadOnly,
     });
   } catch (err) {
     io.err(`Dashboard failed to start: ${(err as Error).message}`);
@@ -391,6 +394,9 @@ export async function runDashboard(
 
   io.out(`pixelguard dashboard running at ${dashboard.url}`);
   io.out(`Reading runs from ${settings.databasePath}. Press Ctrl+C to stop.`);
+  if (options.readOnly ?? settings.dashboardReadOnly) {
+    io.out("Read-only: accepting and restoring baselines is turned off.");
+  }
   await (deps.waitForStop ?? ((d) => waitForSignal(d, io)))(dashboard);
   return EXIT_OK;
 }

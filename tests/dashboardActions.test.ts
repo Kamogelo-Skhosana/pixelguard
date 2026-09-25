@@ -411,3 +411,57 @@ describe("router robustness (P043)", () => {
     expect(await page.locator("#empty").count()).toBe(1);
   });
 });
+
+describe("read-only dashboard (P047)", () => {
+  /** Swaps this test's server for a read-only one on the same data. */
+  async function restartReadOnly() {
+    await new Promise<void>((r) => {
+      server.close(() => r());
+      server.closeAllConnections();
+    });
+    server = createApp({ db, outputDir: out, projectDir: out, readOnly: true }).listen(
+      0,
+      "127.0.0.1"
+    );
+    await new Promise((r) => server.once("listening", r));
+    url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  }
+
+  it("shows the command line instead of accept buttons", async () => {
+    const id = saveTestRun([shot("home", "Real Bug"), shot("pricing", "Uncertain")]);
+    await restartReadOnly();
+    await open(`#/runs/${id}`);
+    expect(await page.locator("#read-only-badge").isVisible()).toBe(true);
+    expect(await page.locator("#accept").count()).toBe(0);
+    expect(await page.locator(".page-actions").count()).toBe(0);
+    await expect(page.locator("#read-only-note code").textContent()).resolves.toBe(
+      "pixelguard accept --from current --to baseline"
+    );
+    expect(pageErrors).toEqual([]);
+  });
+
+  it("lists history without restore buttons", async () => {
+    const id = saveTestRun([shot("home", "Real Bug")]);
+    // Make some history first (the normal server), then go read-only.
+    const accepted = await fetch(`${url}/api/runs/${id}/accept`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(accepted.status).toBe(200);
+    await restartReadOnly();
+    await open("#/baselines");
+    expect(await page.locator("#history-table tbody tr").count()).toBe(2);
+    expect(await page.locator("#history-table .action").count()).toBe(0);
+    await expect(page.locator("#history-intro").textContent()).resolves.toContain(
+      "This dashboard is read-only"
+    );
+    await navigate("#/baselines/baseline/v1");
+    expect(await page.locator('[id="restore-v1"]').count()).toBe(0);
+  });
+
+  it("hides the badge on a normal dashboard", async () => {
+    await open("#/runs");
+    expect(await page.locator("#read-only-badge").isVisible()).toBe(false);
+  });
+});

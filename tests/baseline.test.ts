@@ -346,3 +346,49 @@ describe("POST /api/runs/:id/accept (P044)", () => {
     expect(r.body.error).toMatch(/no longer exists/);
   });
 });
+
+describe("read-only dashboard (P047)", () => {
+  let db: Database.Database;
+  let server: Server;
+  let base: string;
+
+  beforeEach(async () => {
+    db = getDatabase(":memory:");
+    saveRun(db, {
+      results: [],
+      baselineTag: "baseline",
+      currentTag: "current",
+      createdAt: new Date("2026-09-25T09:00:00.000Z"),
+    });
+    server = createApp({ db, outputDir: out, readOnly: true }).listen(0, "127.0.0.1");
+    await new Promise((r) => server.once("listening", r));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  afterEach(async () => {
+    await new Promise((r) => server.close(r));
+    db.close();
+  });
+
+  it.each([
+    ["/api/runs/1/accept", {}],
+    ["/api/baselines/baseline/restore", { version: 1 }],
+  ])("refuses POST %s and changes nothing", async (path, body) => {
+    const res = await fetch(`${base}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    expect(res.status).toBe(403);
+    const json = await res.json();
+    expect(json.code).toBe("read_only");
+    expect(json.error).toMatch(/read-only.*pixelguard accept/);
+    expect(fixtureOf("baseline", "desktop/home.png")).toBe("identical");
+  });
+
+  it("still serves reads and says it's read-only", async () => {
+    expect((await fetch(`${base}/api/runs`)).status).toBe(200);
+    expect((await fetch(`${base}/api/baselines/baseline/history`)).status).toBe(200);
+    expect(await (await fetch(`${base}/api/health`)).json()).toMatchObject({ readOnly: true });
+  });
+});

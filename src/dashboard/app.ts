@@ -2,7 +2,7 @@
  * The dashboard's Express app (Phase 3).
  *
  *   GET /             -> the dashboard frontend (public/, P039+)
- *   GET /api/health   -> { status, version, schemaVersion, runs }
+ *   GET /api/health   -> { status, version, schemaVersion, runs, readOnly }
  *   /api/runs...      -> run history endpoints (P036-P038)
  *
  * Unknown /api routes get a JSON 404 and errors a JSON 500, so the
@@ -28,6 +28,8 @@ export interface AppOptions {
   now?: () => Date;
   /** Root screenshots folder, for accepting baselines (default: "screenshots"). */
   outputDir?: string;
+  /** When true, accepting and restoring baselines is refused (P047). */
+  readOnly?: boolean;
 }
 
 /**
@@ -54,6 +56,7 @@ export function createApp({
   projectDir = process.cwd(),
   now,
   outputDir = "screenshots",
+  readOnly = false,
 }: AppOptions): Express {
   const app = express();
   app.disable("x-powered-by");
@@ -67,10 +70,12 @@ export function createApp({
       version: PIXELGUARD_VERSION,
       schemaVersion: schemaVersion(db),
       runs: n,
+      // Lets the frontend hide the accept/restore buttons (P047).
+      readOnly,
     });
   });
 
-  app.use("/api", createApiRouter(db, { projectDir, now, outputDir }));
+  app.use("/api", createApiRouter(db, { projectDir, now, outputDir, readOnly }));
 
   // Anything else under /api that no route handled.
   app.use("/api", (req, res) => {

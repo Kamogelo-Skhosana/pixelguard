@@ -126,6 +126,8 @@ docker compose run --rm pixelguard diff --baseline baseline --current current --
 - On Linux, `./pixelguard-data` must be writable by user id 1000 (the container's user). It is if you cloned the repo as the usual first user; otherwise run `sudo chown 1000 pixelguard-data`.
 - Without Compose: `docker build -t pixelguard .`, then `docker run --rm -p 127.0.0.1:8100:8100 --env-file .env -e DASHBOARD_HOST=0.0.0.0 -v "$PWD/pixelguard-data:/data" pixelguard`.
 
+To keep the dashboard running on a server, share it read-only with your team, or put it behind a password, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 ## Project Structure
 
 ```

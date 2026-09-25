@@ -18,6 +18,8 @@ export interface DashboardOptions {
   host: string;
   /** 0 picks a free port (used by tests). */
   port: number;
+  /** Refuse accept/restore (P047). */
+  readOnly?: boolean;
 }
 
 export interface RunningDashboard {
@@ -29,7 +31,7 @@ export interface RunningDashboard {
 
 export async function startDashboard(options: DashboardOptions): Promise<RunningDashboard> {
   const db = getDatabase(options.databasePath);
-  const app = createApp({ db, outputDir: options.outputDir });
+  const app = createApp({ db, outputDir: options.outputDir, readOnly: options.readOnly });
 
   let server: Server;
   try {

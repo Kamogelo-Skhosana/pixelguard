@@ -264,6 +264,14 @@ screenshots/_history/baseline/v2/            ...
 - **`.dockerignore`** keeps `.env`, databases, captures, `node_modules` and `.git` out of the build context.
 - **`tests/docker.test.ts`** checks these rules without needing Docker.
 
+## Running and sharing (P047)
+
+- Hosted deployment is out of scope: data is local (SQLite plus screenshot folders) and the dashboard has no accounts. [DEPLOYMENT.md](DEPLOYMENT.md) covers every way to run it: from source, the built version (`npm start`), Docker, systemd and Windows Task Scheduler, reverse proxies with a password (Caddy, nginx), data, backups, upgrades and troubleshooting.
+- **Read-only mode** (`--read-only` or `DASHBOARD_READ_ONLY=true`) makes it safe to share.
+  - The API refuses `POST …/accept` and `POST …/restore` with 403 and `code: "read_only"` before looking at anything else.
+  - `/api/health` reports `readOnly`. The frontend (`public/js/server.js`) reads it before the first page and then shows a "Read-only" badge. In place of the accept buttons it shows the `pixelguard accept` command, and it hides the restore buttons.
+- The same-origin check on actions compares `Origin` with `Host`, so a reverse proxy must pass the original `Host` header on (`proxy_set_header Host $host` in nginx).
+
 ## Data Flow (end-to-end)
 
 1. User runs `pixelguard capture --tag current`

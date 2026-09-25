@@ -72,6 +72,7 @@ describe("loadSettings", () => {
       databasePath: "./pixelguard.db",
       dashboardHost: "127.0.0.1",
       dashboardPort: 8100,
+      dashboardReadOnly: false,
     });
   });
 

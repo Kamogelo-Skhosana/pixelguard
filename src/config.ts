@@ -48,6 +48,8 @@ export interface Settings {
   dashboardHost: string;
   /** Port the dashboard listens on (default 8100). */
   dashboardPort: number;
+  /** When true, the dashboard can't accept or restore baselines (P047). */
+  dashboardReadOnly: boolean;
 }
 
 /** Thrown when .env values are missing or invalid. */
@@ -135,6 +137,15 @@ const EnvSchema = z.object({
     .min(0, "DASHBOARD_PORT must be between 0 and 65535")
     .max(65535, "DASHBOARD_PORT must be between 0 and 65535")
     .default(8100),
+  DASHBOARD_READ_ONLY: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .refine((v) => ["true", "false", "1", "0", "yes", "no"].includes(v), {
+      message: "DASHBOARD_READ_ONLY must be true or false",
+    })
+    .transform((v) => ["true", "1", "yes"].includes(v))
+    .default("false"),
   DATABASE_URL: z
     .string()
     .trim()
@@ -191,5 +202,6 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     databasePath: sqlitePathFromUrl(data.DATABASE_URL),
     dashboardHost: data.DASHBOARD_HOST,
     dashboardPort: data.DASHBOARD_PORT,
+    dashboardReadOnly: data.DASHBOARD_READ_ONLY,
   };
 }

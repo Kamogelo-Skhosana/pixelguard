@@ -71,6 +71,7 @@ beforeAll(async () => {
     databasePath: join(dir, "pixelguard.db"),
     dashboardHost: "127.0.0.1",
     dashboardPort: 0,
+    dashboardReadOnly: false,
   };
   // A correct judge: the date change is fine, the pricing layout is broken.
   llm = new MockLLM((call) => {

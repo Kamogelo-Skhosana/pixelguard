@@ -74,6 +74,8 @@ export interface ApiOptions {
   now?: () => Date;
   /** Root screenshots folder (Settings.outputDir), for accepting baselines. */
   outputDir: string;
+  /** Refuse accept/restore with 403 (P047). */
+  readOnly?: boolean;
 }
 
 export function createApiRouter(
@@ -81,6 +83,21 @@ export function createApiRouter(
   options: ApiOptions = { projectDir: process.cwd(), outputDir: "screenshots" }
 ): express.Router {
   const router = express.Router();
+
+  // Read-only dashboards (P047) can be shared safely: every action that
+  // changes files on disk is refused before anything else is looked at.
+  const refuseIfReadOnly: express.RequestHandler = (_req, res, next) => {
+    if (options.readOnly) {
+      res.status(403).json({
+        error:
+          "This dashboard is read-only, so baselines can't be changed here. " +
+          "Use `pixelguard accept` or `pixelguard baseline restore` instead.",
+        code: "read_only",
+      });
+      return;
+    }
+    next();
+  };
 
   // GET /api/runs?limit=50&offset=0&status=fail&target=https://example.com  (P036)
   router.get("/runs", (req, res) => {
@@ -152,7 +169,7 @@ export function createApiRouter(
   // Promotes the run's current capture to be the new baseline. This changes
   // files on disk, so it only accepts JSON from the dashboard's own origin
   // (a form or script on another website can't trigger it).
-  router.post("/runs/:id/accept", async (req, res, next) => {
+  router.post("/runs/:id/accept", refuseIfReadOnly, async (req, res, next) => {
     try {
       if (!req.is("application/json")) {
         res.status(415).json({ error: "Send a JSON body (Content-Type: application/json)" });
@@ -302,7 +319,7 @@ export function createApiRouter(
   });
 
   // POST /api/baselines/:tag/restore  { "version": 3 }  (P045) — same protections as accept.
-  router.post("/baselines/:tag/restore", async (req, res, next) => {
+  router.post("/baselines/:tag/restore", refuseIfReadOnly, async (req, res, next) => {
     try {
       if (!req.is("application/json")) {
         res.status(415).json({ error: "Send a JSON body (Content-Type: application/json)" });

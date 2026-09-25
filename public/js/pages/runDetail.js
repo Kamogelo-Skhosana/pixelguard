@@ -4,6 +4,7 @@
 import { acceptRun, ApiError, fetchRun } from "../api.js";
 import { confirmable } from "../actions.js";
 import { h, setChildren } from "../dom.js";
+import { server } from "../server.js";
 import {
   describeSizeChange,
   formatCount,
@@ -180,6 +181,25 @@ function pageAccept(run, page) {
   );
 }
 
+/** What a read-only dashboard shows instead of the accept buttons (P047). */
+function readOnlyNote(run) {
+  return h(
+    "section",
+    { class: "accept-panel accept-panel--read-only", id: "read-only-note" },
+    h("h2", {}, "Accept these changes"),
+    h(
+      "p",
+      {},
+      "This dashboard is read-only. If these changes are intended, accept them from the command line:"
+    ),
+    h(
+      "pre",
+      {},
+      h("code", {}, `pixelguard accept --from ${run.currentTag} --to ${run.baselineTag}`)
+    )
+  );
+}
+
 /** Panel for accepting the whole run, shown when something changed. */
 function acceptPanel(run) {
   return h(
@@ -232,7 +252,7 @@ function pageSection(page, run) {
     unchanged.length > 0
       ? h("p", { class: "muted small unchanged" }, `Unchanged: ${unchanged.join(", ")}.`)
       : null,
-    page.status !== "pass" ? pageAccept(run, page) : null
+    page.status !== "pass" && !server.readOnly ? pageAccept(run, page) : null
   );
 }
 
@@ -303,7 +323,11 @@ export async function renderRunDetail(root, id, ctx) {
     root,
     runHeader(run),
     // Nothing to accept when every page passed.
-    pages.some((p) => p.status !== "pass") ? acceptPanel(run) : null,
+    pages.some((p) => p.status !== "pass")
+      ? server.readOnly
+        ? readOnlyNote(run)
+        : acceptPanel(run)
+      : null,
     pages.length > 0
       ? h("section", { class: "pages", id: "pages" }, ...pages.map((p) => pageSection(p, run)))
       : h("div", { class: "empty" }, "This run didn't compare any pages.")

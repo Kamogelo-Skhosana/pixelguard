@@ -42,7 +42,7 @@ const get = async (path: string, base = dashboard.url) => {
 };
 
 describe("dashboard API skeleton (P035)", () => {
-  it("GET /api/health reports status, version, schema and run count", async () => {
+  it("GET /api/health reports status, version, schema, run count and read-only", async () => {
     const r = await get("/api/health");
     expect(r.status).toBe(200);
     expect(r.body).toEqual({
@@ -50,6 +50,7 @@ describe("dashboard API skeleton (P035)", () => {
       version: PIXELGUARD_VERSION,
       schemaVersion: SCHEMA_VERSION,
       runs: 0,
+      readOnly: false,
     });
     expect(r.headers.get("content-type")).toMatch(/application\/json/);
   });
@@ -125,9 +126,10 @@ describe("pixelguard dashboard command", () => {
     databasePath: ":memory:",
     dashboardHost: "127.0.0.1",
     dashboardPort: 0,
+    dashboardReadOnly: false,
   };
 
-  async function run(args: string[]) {
+  async function run(args: string[], overrides: Partial<Settings> = {}) {
     const out: string[] = [];
     const err: string[] = [];
     const io: CommandIO = { out: (l) => out.push(l), err: (l) => err.push(l), colour: false };
@@ -135,7 +137,7 @@ describe("pixelguard dashboard command", () => {
     let healthWhileRunning: unknown;
     await createProgram({
       io,
-      loadSettings: () => settings,
+      loadSettings: () => ({ ...settings, ...overrides }),
       setExitCode: (c) => {
         code = c;
       },
@@ -154,6 +156,24 @@ describe("pixelguard dashboard command", () => {
     expect(r.out).toMatch(/pixelguard dashboard running at http:\/\/127\.0\.0\.1:\d+/);
     expect(r.out).toContain("Press Ctrl+C to stop.");
     expect(r.healthWhileRunning).toMatchObject({ status: "ok" });
+  });
+
+  it("isn't read-only unless asked (P047)", async () => {
+    const r = await run(["dashboard"]);
+    expect(r.out).not.toContain("Read-only");
+    expect(r.healthWhileRunning).toMatchObject({ readOnly: false });
+  });
+
+  it("--read-only turns off accept and restore (P047)", async () => {
+    const r = await run(["dashboard", "--read-only"]);
+    expect(r.code).toBe(EXIT_OK);
+    expect(r.out).toContain("Read-only: accepting and restoring baselines is turned off.");
+    expect(r.healthWhileRunning).toMatchObject({ status: "ok", readOnly: true });
+  });
+
+  it("DASHBOARD_READ_ONLY=true does the same (P047)", async () => {
+    const r = await run(["dashboard"], { dashboardReadOnly: true });
+    expect(r.healthWhileRunning).toMatchObject({ readOnly: true });
   });
 
   it("--port and --host override the settings", async () => {
@@ -196,6 +216,26 @@ describe("dashboard settings", () => {
       DASHBOARD_PORT: "9000",
     });
     expect([s.dashboardHost, s.dashboardPort]).toEqual(["0.0.0.0", 9000]);
+  });
+
+  it.each([
+    ["true", true],
+    ["TRUE", true],
+    ["1", true],
+    ["yes", true],
+    ["false", false],
+    ["0", false],
+    ["no", false],
+    ["", false],
+  ])("reads DASHBOARD_READ_ONLY=%j as %s (P047)", (value, expected) => {
+    const s = loadSettings({ TARGET_BASE_URL: "http://x.test", DASHBOARD_READ_ONLY: value });
+    expect(s.dashboardReadOnly).toBe(expected);
+  });
+
+  it("rejects an unclear DASHBOARD_READ_ONLY (P047)", () => {
+    expect(() =>
+      loadSettings({ TARGET_BASE_URL: "http://x.test", DASHBOARD_READ_ONLY: "maybe" })
+    ).toThrow(/DASHBOARD_READ_ONLY must be true or false/);
   });
 
   it.each(["abc", "70000", "80.5"])("rejects DASHBOARD_PORT=%s", (port) => {

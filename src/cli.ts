@@ -7,7 +7,7 @@
  *   pixelguard accept --from <tag> [--to baseline] [--pages home,pricing] [--force]
  *   pixelguard baseline history [--tag baseline]
  *   pixelguard baseline restore <version> [--tag baseline]
- *   pixelguard dashboard [--port 8100] [--host 127.0.0.1]
+ *   pixelguard dashboard [--port 8100] [--host 127.0.0.1] [--read-only]
  *   pixelguard diff --baseline <tag> --current <tag> [--output diffs.json]
  *                   [--threshold 0.1] [--fail-on-change]
  *                   [--change "<what changed>" | --change-file notes.txt] [--judge]
@@ -192,7 +192,11 @@ export function createProgram(deps: ProgramDeps = {}): Command {
     .description("Start the web dashboard for browsing saved runs")
     .option("--port <number>", "Port to listen on (default DASHBOARD_PORT or 8100)", parsePort)
     .option("--host <address>", "Address to listen on (default DASHBOARD_HOST or 127.0.0.1)")
-    .action((opts: { port?: number; host?: string }) =>
+    .option(
+      "--read-only",
+      "Show runs and history but don't allow accepting or restoring baselines (or DASHBOARD_READ_ONLY=true)"
+    )
+    .action((opts: { port?: number; host?: string; readOnly?: boolean }) =>
       withSettings((s) => runDashboard(s, opts, io, { waitForStop: deps.waitForStop }))
     );
 

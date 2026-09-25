@@ -5,6 +5,7 @@ import { ApiError, fetchBaselineHistory, fetchBaselineVersion, restoreBaseline }
 import { confirmable } from "../actions.js";
 import { h, setChildren } from "../dom.js";
 import { formatDate, relativeTime } from "../format.js";
+import { server } from "../server.js";
 
 const enc = encodeURIComponent;
 const historyHash = (tag) => `#/baselines/${enc(tag)}`;
@@ -102,7 +103,9 @@ function historyTable(history, onRestored) {
             h(
               "td",
               { class: "row-actions" },
-              !v.current && v.archived ? restoreAction(history.tag, v.version, onRestored) : null
+              !v.current && v.archived && !server.readOnly
+                ? restoreAction(history.tag, v.version, onRestored)
+                : null
             )
           )
         )
@@ -124,7 +127,10 @@ export async function renderBaselines(root, tag, ctx) {
   const intro = h(
     "p",
     { class: "muted", id: "history-intro" },
-    `Every version of the "${history.tag}" baseline, newest first. A new version is saved each time changes are accepted or an old version is restored.`
+    `Every version of the "${history.tag}" baseline, newest first. A new version is saved each time changes are accepted or an old version is restored.`,
+    server.readOnly
+      ? ` This dashboard is read-only; restore a version with: pixelguard baseline restore <version> --tag ${history.tag}`
+      : null
   );
 
   if (history.versions.length === 0) {
@@ -202,7 +208,7 @@ export async function renderBaselineVersion(root, tag, version, ctx, notice = nu
     entry ? h("span", {}, h("strong", {}, "How: "), describeSource(entry)) : null
   );
   const actions =
-    entry && !entry.current && entry.archived
+    entry && !entry.current && entry.archived && !server.readOnly
       ? h(
           "div",
           { class: "accept-panel" },

@@ -53,6 +53,7 @@ beforeAll(async () => {
     databasePath: ":memory:",
     dashboardHost: "127.0.0.1",
     dashboardPort: 0,
+    dashboardReadOnly: false,
   };
 });
 

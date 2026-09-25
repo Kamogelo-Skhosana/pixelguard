@@ -113,7 +113,7 @@ Suggested labels: `phase-1`, `phase-2`, `phase-3`, plus an epic label per group 
 ### Epic: Deployment
 
 - [x] **P046** — Write `Dockerfile` + `docker-compose.yml` (app + Playwright browsers)
-- [ ] **P047** — Deploy the dashboard (or fully document local-run steps if hosted deploy is out of scope)
+- [x] **P047** — Deploy the dashboard (or fully document local-run steps if hosted deploy is out of scope)
 
 ### Epic: Docs & Final Demo Readiness
 

@@ -10,6 +10,7 @@ import { renderBaselines, renderBaselineVersion } from "./pages/baselines.js";
 import { renderRunDetail } from "./pages/runDetail.js";
 import { renderRunList } from "./pages/runList.js";
 import { renderTrend } from "./pages/trend.js";
+import { loadServerInfo } from "./server.js";
 
 const root = /** @type {HTMLElement} */ (document.getElementById("app"));
 
@@ -106,4 +107,5 @@ window.addEventListener("hashchange", () => {
   document.body.dataset.ready = "false";
   void route();
 });
-void route();
+// Learn whether the server is read-only before drawing the first page.
+void loadServerInfo().then(route);
