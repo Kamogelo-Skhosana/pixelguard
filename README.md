@@ -28,6 +28,14 @@ pixelguard is built in three phases, each ending in something tangible and demoa
 | **Phase 2 — AI Judgment Layer**          | Separate real bugs from noise         | The same CLI now outputs a **verdict per page** (Real Bug / Acceptable Change / Uncertain) with plain-English reasoning, in a Markdown report |
 | **Phase 3 — Dashboard & History**        | Make it demoable and manage baselines | A deployed web dashboard showing run history, a side-by-side diff viewer, trend charts, and a one-click "accept as new baseline" action       |
 
+## Dashboard (Phase 3, in progress)
+
+Every `pixelguard diff` run is saved to `pixelguard.db`. Start the dashboard with:
+
+```bash
+npm run pixelguard -- dashboard        # http://127.0.0.1:8100
+```
+
 ## Try the Demo
 
 A small demo shop is bundled in [`examples/demo-site/`](examples/demo-site/). One command runs the whole pipeline against it:

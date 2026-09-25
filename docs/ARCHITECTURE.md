@@ -194,6 +194,15 @@ pixelguard diff --baseline <tag> --current <tag> [--output diffs.json] [--thresh
 
 Exit codes: `0` success · `1` changes found with `--fail-on-change`, or a Real Bug with `--fail-on-bug` · `2` error (bad config or arguments, failed screenshots, missing capture)
 
+## Dashboard server (Phase 3)
+
+- Start it with `npm run pixelguard -- dashboard` (or `npm run dev:dashboard`); `--port` / `--host` override `DASHBOARD_PORT` (default `8100`) and `DASHBOARD_HOST` (default `127.0.0.1`, so only this computer can reach it — use `0.0.0.0` in Docker or to share it on your network). Ctrl+C stops it cleanly
+- `src/dashboard/app.ts` — `createApp({ db })` builds the Express app; it takes an open database so tests can use an in-memory one
+- `GET /api/health` → `{ status, version, schemaVersion, runs }`
+- `/api/runs`, `/api/runs/:id`, `/api/runs/trend` — run history (P036–P038)
+- Unknown `/api` routes return a JSON 404; route errors are logged on the server and returned as a generic JSON 500 (no internal details); the `X-Powered-By` header is off
+- A port that's already in use gives a clear error (exit code 2)
+
 ## Data Flow (end-to-end)
 
 1. User runs `pixelguard capture --tag current`
@@ -214,6 +223,7 @@ All configuration lives in `.env` (see `.env.example`):
 - `OUTPUT_DIR` — where screenshots are stored (defaults to `screenshots`)
 - `DIFF_DIR` — where diff images are written (defaults to `diffs`)
 - `LLM_API_KEY` — API key for the judgment layer's vision LLM calls (not needed for Phase 1)
+- `DASHBOARD_HOST` / `DASHBOARD_PORT` — where the dashboard listens (defaults `127.0.0.1` and `8100`)
 - `DATABASE_URL` — SQLite location, e.g. `sqlite:./pixelguard.db` (the default). The `sqlite:` prefix is stripped by `sqlitePathFromUrl()` in `config.ts`, and the resulting `Settings.databasePath` is what gets passed to better-sqlite3
 
 `loadSettings()` in `src/config.ts` validates these values and throws a `ConfigError` listing every problem at once, pointing back to `.env.example`.

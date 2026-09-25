@@ -51,6 +51,8 @@ beforeAll(async () => {
     llmModel: "test",
     databaseUrl: "sqlite::memory:",
     databasePath: ":memory:",
+    dashboardHost: "127.0.0.1",
+    dashboardPort: 0,
   };
 });
 

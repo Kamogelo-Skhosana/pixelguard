@@ -1,12 +1,16 @@
 /**
  * Express API routes for the pixelguard dashboard.
  *
+ * Mounted at /api by createApp() (app.ts). Each route reads from the
+ * database passed in.
+ *
  * Tickets: P035, P036, P037, P038
  */
 
 import express from "express";
+import type Database from "better-sqlite3";
 
-export function createApiRouter(): express.Router {
+export function createApiRouter(_db: Database.Database): express.Router {
   const router = express.Router();
 
   router.get("/runs", (_req, res) => {

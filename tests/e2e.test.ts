@@ -69,6 +69,8 @@ beforeAll(async () => {
     llmModel: "mock-model",
     databaseUrl: `sqlite:${join(dir, "pixelguard.db")}`,
     databasePath: join(dir, "pixelguard.db"),
+    dashboardHost: "127.0.0.1",
+    dashboardPort: 0,
   };
   // A correct judge: the date change is fine, the pricing layout is broken.
   llm = new MockLLM((call) => {

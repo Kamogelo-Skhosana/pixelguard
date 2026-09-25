@@ -4,6 +4,7 @@
  *
  * Usage:
  *   pixelguard capture --tag <name>
+ *   pixelguard dashboard [--port 8100] [--host 127.0.0.1]
  *   pixelguard diff --baseline <tag> --current <tag> [--output diffs.json]
  *                   [--threshold 0.1] [--fail-on-change]
  *                   [--change "<what changed>" | --change-file notes.txt] [--judge]
@@ -22,18 +23,28 @@ import {
   consoleIO,
   EXIT_ERROR,
   runCapture,
+  runDashboard,
   runDiff,
   type CommandIO,
+  type DashboardCommandDeps,
   type DiffCommandDeps,
 } from "./commands.js";
 import { ConfigError, loadSettings, type Settings } from "./config.js";
 import { shouldUseColour } from "./report/console.js";
 
-export interface ProgramDeps extends DiffCommandDeps {
+export interface ProgramDeps extends DiffCommandDeps, DashboardCommandDeps {
   io?: CommandIO;
   loadSettings?: () => Settings;
   /** Receives the command's exit code (defaults to setting process.exitCode). */
   setExitCode?: (code: number) => void;
+}
+
+function parsePort(value: string): number {
+  const n = Number(value);
+  if (!/^\d+$/.test(value.trim()) || n > 65535) {
+    throw new InvalidArgumentError("must be a whole number from 0 to 65535.");
+  }
+  return n;
 }
 
 function parseThreshold(value: string): number {
@@ -132,6 +143,15 @@ export function createProgram(deps: ProgramDeps = {}): Command {
           runDiff(s, opts, io, { createLLM: deps.createLLM, now: deps.now })
         );
       }
+    );
+
+  program
+    .command("dashboard")
+    .description("Start the web dashboard for browsing saved runs")
+    .option("--port <number>", "Port to listen on (default DASHBOARD_PORT or 8100)", parsePort)
+    .option("--host <address>", "Address to listen on (default DASHBOARD_HOST or 127.0.0.1)")
+    .action((opts: { port?: number; host?: string }) =>
+      withSettings((s) => runDashboard(s, opts, io, { waitForStop: deps.waitForStop }))
     );
 
   return program;

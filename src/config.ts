@@ -44,6 +44,10 @@ export interface Settings {
   databaseUrl: string;
   /** Plain file path for better-sqlite3, derived from databaseUrl. */
   databasePath: string;
+  /** Address the dashboard listens on (default 127.0.0.1 — this machine only). */
+  dashboardHost: string;
+  /** Port the dashboard listens on (default 8100). */
+  dashboardPort: number;
 }
 
 /** Thrown when .env values are missing or invalid. */
@@ -124,6 +128,13 @@ const EnvSchema = z.object({
   REGIONS_FILE: z.string().trim().optional(),
   LLM_API_KEY: z.string().default(""),
   LLM_MODEL: z.string().trim().min(1, "LLM_MODEL cannot be empty").default("claude-sonnet-5"),
+  DASHBOARD_HOST: z.string().trim().min(1).default("127.0.0.1"),
+  DASHBOARD_PORT: z.coerce
+    .number({ invalid_type_error: "DASHBOARD_PORT must be a number" })
+    .int("DASHBOARD_PORT must be a whole number")
+    .min(0, "DASHBOARD_PORT must be between 0 and 65535")
+    .max(65535, "DASHBOARD_PORT must be between 0 and 65535")
+    .default(8100),
   DATABASE_URL: z
     .string()
     .trim()
@@ -178,5 +189,7 @@ export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     llmModel: data.LLM_MODEL,
     databaseUrl: data.DATABASE_URL,
     databasePath: sqlitePathFromUrl(data.DATABASE_URL),
+    dashboardHost: data.DASHBOARD_HOST,
+    dashboardPort: data.DASHBOARD_PORT,
   };
 }

@@ -92,7 +92,7 @@ Suggested labels: `phase-1`, `phase-2`, `phase-3`, plus an epic label per group 
 
 ### Epic: Backend API
 
-- [ ] **P035** — Set up Express/Fastify API skeleton, served alongside the existing CLI
+- [x] **P035** — Set up Express/Fastify API skeleton, served alongside the existing CLI
 - [ ] **P036** — Implement `GET /runs` — list run history
 - [ ] **P037** — Implement `GET /runs/:id` — page diffs detail for one run
 - [ ] **P038** — Implement `GET /runs/trend` — regression rate over time

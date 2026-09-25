@@ -1,5 +1,5 @@
 /**
- * Implementation of the `pixelguard capture` and `pixelguard diff` commands.
+ * Implementation of the `pixelguard capture`, `diff` and `dashboard` commands.
  *
  * Kept separate from cli.ts (argument parsing) so the commands can be tested
  * directly. Each returns a process exit code:
@@ -36,6 +36,7 @@ import {
 import { exportJson } from "./report/jsonExport.js";
 import { generateMarkdownReport, writeReport } from "./report/markdown.js";
 import { getDatabase, saveRun } from "./report/persistence.js";
+import { startDashboard, type RunningDashboard } from "./dashboard/server.js";
 
 export const EXIT_OK = 0;
 export const EXIT_CHANGES = 1;
@@ -335,4 +336,55 @@ export async function runDiff(
     io.err(`Diff failed: ${(err as Error).message}`);
     return EXIT_ERROR;
   }
+}
+
+export interface DashboardCommandOptions {
+  port?: number;
+  host?: string;
+}
+
+export interface DashboardCommandDeps {
+  /**
+   * Called once the server is up. The CLI waits for Ctrl+C here; tests pass a
+   * function that stops the server straight away.
+   */
+  waitForStop?: (dashboard: RunningDashboard) => Promise<void>;
+}
+
+/** Waits for Ctrl+C (or SIGTERM), then stops the dashboard cleanly. */
+function waitForSignal(dashboard: RunningDashboard, io: CommandIO): Promise<void> {
+  return new Promise((resolve) => {
+    const stop = () => {
+      process.off("SIGINT", stop);
+      process.off("SIGTERM", stop);
+      io.out("\nStopping the dashboard...");
+      void dashboard.close().then(resolve);
+    };
+    process.on("SIGINT", stop);
+    process.on("SIGTERM", stop);
+  });
+}
+
+export async function runDashboard(
+  settings: Settings,
+  options: DashboardCommandOptions,
+  io: CommandIO,
+  deps: DashboardCommandDeps = {}
+): Promise<number> {
+  let dashboard: RunningDashboard;
+  try {
+    dashboard = await startDashboard({
+      databasePath: settings.databasePath,
+      host: options.host ?? settings.dashboardHost,
+      port: options.port ?? settings.dashboardPort,
+    });
+  } catch (err) {
+    io.err(`Dashboard failed to start: ${(err as Error).message}`);
+    return EXIT_ERROR;
+  }
+
+  io.out(`pixelguard dashboard running at ${dashboard.url}`);
+  io.out(`Reading runs from ${settings.databasePath}. Press Ctrl+C to stop.`);
+  await (deps.waitForStop ?? ((d) => waitForSignal(d, io)))(dashboard);
+  return EXIT_OK;
 }

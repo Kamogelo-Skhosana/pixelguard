@@ -70,6 +70,8 @@ describe("loadSettings", () => {
       llmModel: "claude-sonnet-5",
       databaseUrl: "sqlite:./pixelguard.db",
       databasePath: "./pixelguard.db",
+      dashboardHost: "127.0.0.1",
+      dashboardPort: 8100,
     });
   });
 

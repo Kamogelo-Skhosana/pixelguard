@@ -1,17 +1,65 @@
 /**
- * Dashboard server entry point (Phase 3).
+ * Starts the dashboard server (Phase 3). Run it with:
+ *
+ *   npm run pixelguard -- dashboard [--port 8100] [--host 127.0.0.1]
  *
  * Ticket: P035
  */
 
-import express from "express";
-import { createApiRouter } from "./api.js";
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import { getDatabase } from "../report/persistence.js";
+import { createApp } from "./app.js";
 
-const app = express();
-app.use("/api", createApiRouter());
+export interface DashboardOptions {
+  databasePath: string;
+  host: string;
+  /** 0 picks a free port (used by tests). */
+  port: number;
+}
 
-const port = process.env.DASHBOARD_PORT ?? 8100;
+export interface RunningDashboard {
+  url: string;
+  port: number;
+  /** Stops the server and closes the database. */
+  close(): Promise<void>;
+}
 
-app.listen(port, () => {
-  console.log(`[pixelguard] Dashboard listening on port ${port}`);
-});
+export async function startDashboard(options: DashboardOptions): Promise<RunningDashboard> {
+  const db = getDatabase(options.databasePath);
+  const app = createApp({ db });
+
+  let server: Server;
+  try {
+    server = await new Promise<Server>((resolve, reject) => {
+      const s = app.listen(options.port, options.host, () => resolve(s));
+      s.once("error", reject);
+    });
+  } catch (err) {
+    db.close();
+    const e = err as NodeJS.ErrnoException;
+    if (e.code === "EADDRINUSE") {
+      throw new Error(
+        `Port ${options.port} is already in use. Pick another with --port or DASHBOARD_PORT.`
+      );
+    }
+    throw new Error(
+      `Could not start the dashboard on ${options.host}:${options.port}: ${e.message}`
+    );
+  }
+
+  const { port } = server.address() as AddressInfo;
+  const shownHost = options.host === "0.0.0.0" ? "localhost" : options.host;
+  return {
+    url: `http://${shownHost}:${port}`,
+    port,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.close(() => {
+          db.close();
+          resolve();
+        });
+        server.closeAllConnections();
+      }),
+  };
+}

@@ -17,7 +17,7 @@
     "test": "vitest run",
     "fixtures:diff": "tsx scripts/generate-diff-fixtures.ts",
     "demo": "tsx scripts/demo.ts",
-    "dev:dashboard": "tsx src/dashboard/server.ts"
+    "dev:dashboard": "tsx src/cli.ts dashboard"
   },
   "dependencies": {
     "better-sqlite3": "^11.1.2",
